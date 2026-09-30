@@ -1,0 +1,17 @@
+{
+  "name": "zcode-workflow-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "test": "node --test --test-timeout=15000 test/*.test.mjs",
+    "bridge": "node bin/bridge.mjs"
+  },
+  "dependencies": {
+    "ajv": "8.20.0",
+    "yaml": "2.8.2"
+  }
+}

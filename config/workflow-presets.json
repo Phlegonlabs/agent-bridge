@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "defaultPreset": "cursor",
+  "presets": {
+    "cursor": {
+      "parallelLimit": 14,
+      "attemptTimeoutMs": 420000,
+      "runTimeoutMs": 540000,
+      "fallback": {
+        "enabled": false,
+        "on": [
+          "TIMEOUT",
+          "PROVIDER_UNAVAILABLE",
+          "CURSOR_MODEL_UNAVAILABLE"
+        ]
+      },
+      "routes": {
+        "cursor-explorer": {
+          "provider": "cursor",
+          "model": "composer-2.5-fast"
+        },
+        "cursor-reviewer": {
+          "provider": "cursor",
+          "model": "grok-4.7-high"
+        },
+        "cursor-composer": {
+          "provider": "cursor",
+          "model": "composer-2.5"
+        }
+      },
+      "workers": {
+        "explorer": {
+          "description": "Locate code and answer focused repository questions with Composer 2.5 Fast.",
+          "route": "cursor-explorer",
+          "fallbacks": []
+        },
+        "reviewer": {
+          "description": "Review correctness and reason about architecture with Grok 4.7 High.",
+          "route": "cursor-reviewer",
+          "fallbacks": []
+        },
+        "cursor": {
+          "description": "Use Composer 2.5 for code analysis and independent review in native ask mode.",
+          "route": "cursor-composer",
+          "fallbacks": []
+        }
+      }
+    }
+  }
+}

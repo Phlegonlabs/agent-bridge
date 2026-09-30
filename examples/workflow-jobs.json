@@ -1,0 +1,5 @@
+[
+  { "id": "locate", "worker": "explorer", "task": "Read the repository and identify the model routing entry points. Do not change files." },
+  { "id": "review", "worker": "reviewer", "task": "Review the workflow scheduler's cancellation and fallback behavior. Do not change files." },
+  { "id": "cursor-review", "worker": "cursor", "task": "Review the saved workflow parameters for usability and report concrete issues. Do not change files." }
+]

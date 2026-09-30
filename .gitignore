@@ -1,0 +1,7 @@
+node_modules/
+.bridge/
+.env
+.env.*
+!.env.example
+*.log
+.zcode/workflow-drafts/

@@ -1,0 +1,1 @@
+Return BRIDGE_PROBE_OK as your entire response. Do not use tools, read files, edit files, or contact external services.

@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "port": 32147,
+  "globalLimit": 14,
+  "limits": {
+    "zcode": 2,
+    "cursor": 12
+  },
+  "attemptTimeoutMs": 420000,
+  "requestTimeoutMs": 540000,
+  "router": "cursor-composer-2.5",
+  "capacityRouting": true,
+  "fallback": {
+    "enabled": false,
+    "on": [
+      "PROVIDER_UNAVAILABLE",
+      "CURSOR_MODEL_UNAVAILABLE"
+    ],
+    "routes": {}
+  },
+  "routes": {
+    "cursor-composer-2.5": {
+      "provider": "cursor",
+      "model": "composer-2.5",
+      "description": "Composer 2.5 via Cursor CLI. Default balanced coding and protocol relay model.",
+      "auto": true
+    },
+    "cursor-composer-2.5-fast": {
+      "provider": "cursor",
+      "model": "composer-2.5-fast",
+      "description": "Composer 2.5 Fast via Cursor CLI. Available in the current account catalog; verify on first use.",
+      "auto": true
+    },
+    "cursor-grok-4.7-high": {
+      "provider": "cursor",
+      "model": "grok-4.7-high",
+      "description": "Grok 4.7  High via Cursor CLI. Available in the current account catalog; verify on first use.",
+      "auto": true
+    },
+    "cursor-grok-4.7-medium": {
+      "provider": "cursor",
+      "model": "grok-4.7-medium",
+      "description": "Grok 4.7  Medium via Cursor CLI. Available in the current account catalog; verify on first use.",
+      "auto": false
+    },
+    "cursor-kimi-k3-high": {
+      "provider": "cursor",
+      "model": "kimi-k3-high",
+      "description": "Kimi K3 High via Cursor CLI. Available in the current account catalog; verify on first use.",
+      "auto": true
+    }
+  }
+}

@@ -1,0 +1,27 @@
+# Native provider
+
+The local provider is registered as **Cursor Bridge**. Select `workflow-auto` in ZCode's model selector or Dynamic Workflow's Sub Agent Model selector. If the current session says to select a model, select its reasoning value `default` as well; the native runtime requires a complete selection.
+
+For role, stage and dependency-aware execution, select the saved `role-auto-route` workflow. It reads the existing personal subagent roles, plans needed tasks and passes explicit context to the router. Existing Default workflows only provide the information present in their actor conversations; the provider cannot recover an unreported dependency graph. See [role routing](role-routing.md).
+
+Connection: OpenAI Chat Completions, `http://127.0.0.1:32147/v1`. The local API key is already registered. It is not a GLM or Cursor account key.
+
+Start the service with `pwsh -NoProfile -NonInteractive -File scripts/start-provider.ps1`. Stop it with `node scripts/stop-provider.mjs`. It is not installed as a Windows login service.
+
+`config/native-provider.json` defines allowed routes. Five are exposed: `cursor-composer-2.5`, `cursor-composer-2.5-fast`, `cursor-grok-4.7-high`, `cursor-grok-4.7-medium` and `cursor-kimi-k3-high`. `scripts/setup-native-provider.mjs` carries the same allowlist, so regenerating the config cannot widen it. Every route uses the `cursor` pool, which is capped at 12 concurrent CLI calls. The global ceiling is 14. These are bridge limits, not account entitlements. Other desktop sessions are not counted.
+
+The config keeps a `zcode` pool entry because the schema requires both pools to be present, but no route uses it: the GLM routes were removed, so the Cursor Bridge dropdown no longer offers GLM Flash or GLM-5.3. Earlier GLM dispatch ran through the same relay as `bin/bridge.mjs run --agent`, which remains available outside the workflow path.
+
+`capacityRouting: true` allows `workflow-auto` to change an existing task's model at its next request when the previous capacity pool is full or cooling down. Available pools are preferred; when all eligible pools are busy, requests queue. Healthy selections stay fixed, including retries after ordinary failures. The full incoming conversation and tool results are passed to the newly selected model. An explicit model selection remains explicit.
+
+Generic same-request fallback remains off. A failed request is not automatically replayed on another model. A detected machine rate limit cools the affected pool and may temporarily reduce its effective concurrency. A later request can select another eligible pool. Capacity observations only cover this bridge. If capacity changes while the router is running, the selected worker may still queue under the global/pool ceilings. State and task affinity are local to the running service; restarting clears affinity, while recorded cooldowns survive.
+
+The relay accepts text and function tools with draft 7, 2019-09 and 2020-12 JSON schemas. Tool arguments are checked before returning them to ZCode. Image inputs are unsupported. CLI work emits SSE heartbeats, then the complete response; it does not provide token-by-token backend streaming.
+
+A request body may be up to 4 MiB. The whole body is buffered before the relay hands anything over 6000 characters to the CLI as a transport file, so this cap only bounds bridge memory. ZCode resends the full conversation every turn, so a long session's body grows until it crosses the cap; at 512 KiB that happened during ordinary work and failed the turn with `413 Request exceeds 512 KiB`. The original 512 KiB was a bare literal with no recorded rationale, and the advertised `contextWindow` is never read by the server, so the two limits were never linked in code. Responses stay capped at 512 KiB.
+
+A Cursor run is accepted only when the model name Cursor reports in its run-time init event covers the route's expected identity. Cursor's catalog label and that run-time name disagree for several models: the catalog prints `Grok 4.7  High` for a model the runtime calls `Grok 4.7 256K High`, and `Grok 4.6` for `Grok 4.6 High`. The check therefore requires every token of the catalog label plus any tier keyword spelled out in the route id (`low`, `medium`, `high`, `max`, `fast`, `mini`, `code`). Cursor adding a token passes; a missing family or tier token is still a mismatch, so requesting a lower tier cannot be satisfied by a higher one. Two limits follow from the catalog being lossy: a compact id alias Cursor never prints, such as `xhigh`, is not enforced, and a token Cursor adds that no id or label carries is accepted.
+
+The relay stays read-only, and the write guard is effect-based. Cursor's ask mode rejects write-family tool calls itself; a call that was merely attempted and rejected did nothing and is tolerated - a relay model occasionally tries to inspect the transport file through a shell command, which the host blocks. A write-family call that actually executed, or whose completion event never arrived, still fails the run with `CURSOR_UNEXPECTED_WRITE_TOOL`.
+
+On 2026-09-22, an official native app-server session selected `workflow-auto`, routed to Cursor Composer 2.5 Fast and received `NATIVE_PROVIDER_OK`. The `UNSUPPORTED_SCHEMA` and Cursor pre-tool narration failures were fixed and regression-tested. GLM's model-relay dispatch fails its exact-dispatch audit, which is why no GLM route is exposed here. See `docs/epics/native-provider.md` for evidence.

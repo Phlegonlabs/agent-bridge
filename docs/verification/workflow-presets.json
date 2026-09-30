@@ -1,0 +1,50 @@
+{
+  "observedOn": "2026-09-22",
+  "scope": "Local Windows official CLI native Dynamic Workflow",
+  "offlineTests": {
+    "passed": 41,
+    "failed": 0,
+    "log": ".bridge/all-tests-presets-20260922-b.log"
+  },
+  "nativeAutoRouting": {
+    "runId": "dwfrun-8daea4ed-1b76-4d7e-abc8-617899b3d39b",
+    "batchRunId": "d87ba01c-fb54-462a-87d4-87e7e85f77ed",
+    "plannerActorCreated": true,
+    "parallelLimit": 2,
+    "peakFromAttemptTimestamps": 2,
+    "jobs": [
+      {
+        "worker": "explorer",
+        "actualModel": "account:zai-individual-coding-plan/GLM-5.3-Flash",
+        "response": "BRIDGE_PROBE_OK",
+        "fallbackUsed": false
+      },
+      {
+        "worker": "reviewer",
+        "actualModel": "account:zai-individual-coding-plan/GLM-5.3",
+        "response": "BRIDGE_PROBE_OK",
+        "fallbackUsed": false
+      },
+      {
+        "worker": "cursor",
+        "actualModel": "cursor/composer-2.5",
+        "response": "BRIDGE_PROBE_OK",
+        "fallbackUsed": false
+      }
+    ]
+  },
+  "mainModelAssignments": {
+    "runId": "dwfrun-e7a1e467-f8b6-4cd9-ad54-a6b6277fa841",
+    "batchRunId": "19352c8e-6ae6-4958-979f-c8c22e659880",
+    "plannerActorCreated": false,
+    "parallelLimit": 14,
+    "peakParallel": 1,
+    "actualModel": "cursor/composer-2.5"
+  },
+  "limits": [
+    "14-slot ceiling tested with a synthetic executor, not 14 live provider sessions",
+    "Fallback tested with injected failures; automatic live fallback remains disabled",
+    "Desktop saved-workflow UI launch not exercised",
+    "No fixed commit SHA or release/security acceptance claim"
+  ]
+}
