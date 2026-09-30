@@ -1,12 +1,12 @@
 import http from 'node:http';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { bridgeRoot } from './account.mjs';
 import { BridgeError } from './profiles.mjs';
 import { ProviderPool } from './provider-pool.mjs';
 import { ModelRelay } from './provider-relay.mjs';
-import { validateChat, completion, streamChunks } from './provider-protocol.mjs';
+import { validateChat, completion } from './provider-protocol.mjs';
 export const providerState = path.join(bridgeRoot, '.bridge', 'provider');
 export async function localToken() {
   await mkdir(providerState, { recursive: true, mode: 0o700 });
@@ -96,17 +96,30 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       }
       let body; try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw new BridgeError('INVALID_REQUEST', 'Invalid JSON body.'); }
       validateChat(body, modelIds);
+      const streamId = `chatcmpl-${randomUUID()}`, streamCreated = Math.floor(Date.now() / 1000);
+      const sse = delta => `data: ${JSON.stringify({ id: streamId, object: 'chat.completion.chunk', created: streamCreated, model: body.model,
+        choices: [{ index: 0, ...delta }] })}\n\n`;
+      let streamed = false;
+      const onContentDelta = body.stream && !body.response_format
+        ? text => { streamed = true; if (!res.destroyed && !controller.signal.aborted) res.write(sse({ delta: { content: text }, finish_reason: null })); }
+        : undefined;
       if (body.stream) {
         res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' }); res.flushHeaders();
+        res.write(sse({ delta: { role: 'assistant', content: '' }, finish_reason: null }));
         heartbeat = setInterval(() => { if (!res.destroyed) res.write(': waiting for CLI model\n\n'); }, 10000);
       }
-      const { message } = await relay.complete(body, { signal: controller.signal, transport: {
+      const { message } = await relay.complete(body, { signal: controller.signal, onContentDelta, transport: {
         sessionId: req.headers['x-session-id'], sessionType: req.headers['x-zcode-session-type'],
       } });
-      const result = completion(message, body.model);
+      const result = completion(message, body.model, streamId);
       if (Buffer.byteLength(JSON.stringify(result)) > MAX_RESPONSE_BYTES) throw new BridgeError('RESPONSE_TOO_LARGE', 'Model response exceeds the local limit.');
       if (controller.signal.aborted) throw new BridgeError('REQUEST_TIMEOUT', 'The request deadline or client connection ended.');
-      if (body.stream) { for (const chunk of streamChunks(result)) res.write(`data: ${JSON.stringify(chunk)}\n\n`); res.end('data: [DONE]\n\n'); }
+      if (body.stream) {
+        if (message.tool_calls?.length) res.write(sse({ delta: { tool_calls: message.tool_calls.map((call, index) => ({ index, ...call })) }, finish_reason: null }));
+        else if (!streamed && message.content) res.write(sse({ delta: { content: message.content }, finish_reason: null }));
+        res.write(sse({ delta: {}, finish_reason: message.tool_calls?.length ? 'tool_calls' : 'stop' }));
+        res.end('data: [DONE]\n\n');
+      }
       else send(res, 200, result);
     } catch (error) {
       const code = error instanceof BridgeError ? error.code : 'PROVIDER_ERROR';

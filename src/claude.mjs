@@ -30,7 +30,7 @@ export async function claudeRuntime(resolved = process.env.CLAUDE_BRIDGE_BIN) {
   return { command, prefix: [], env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' } };
 }
 
-export async function runClaude({ cwd, task, model, timeoutMs = 60000, signal, claudeBin }) {
+export async function runClaude({ cwd, task, model, timeoutMs = 60000, signal, claudeBin, onTextDelta }) {
   if (typeof model !== 'string' || !model || model === 'auto') throw new BridgeError('CLAUDE_MODEL_REQUIRED', 'Choose an explicit Claude model id, for example claude-opus-5-5.');
   if (typeof task !== 'string' || !task.trim() || Buffer.byteLength(task) > 32768) throw new BridgeError('INVALID_TASK', 'Task must be 1..32768 bytes.');
   if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 600000) throw new BridgeError('INVALID_TIMEOUT', 'Timeout must be 100..600000 ms.');
@@ -44,6 +44,19 @@ export async function runClaude({ cwd, task, model, timeoutMs = 60000, signal, c
   await writeFile(path.join(logs, 'request.json'), JSON.stringify({ runId, provider: 'claude', model,
     taskSha256: hash(task), mode: 'read-only', timeoutMs }, null, 2), { flag: 'wx', mode: 0o600 });
   const audit = createClaudeAudit(model);
+  // Partial text is advisory: verification still comes from the full audit.
+  const onLine = onTextDelta
+    ? line => {
+        audit.ingest(line);
+        if (line.includes('"stream_event"')) {
+          try {
+            const event = JSON.parse(line);
+            if (event?.type === 'stream_event' && event.event?.type === 'content_block_delta' &&
+                event.event.delta?.type === 'text_delta' && typeof event.event.delta.text === 'string') onTextDelta(event.event.delta.text);
+          } catch { /* Deltas never fail a run. */ }
+        }
+      }
+    : line => audit.ingest(line);
   const remainingMs = deadline - Date.now();
   if (remainingMs < 100) throw new BridgeError('TIMEOUT', 'Claude preflight exhausted the run deadline.');
   const execution = await runProcess({ command: runtime.command, cwd: workspace, env: runtime.env,
@@ -51,8 +64,9 @@ export async function runClaude({ cwd, task, model, timeoutMs = 60000, signal, c
       '--safe-mode', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
       '--permission-mode', 'dontAsk', '--permission-prompts', 'none',
       '--tools', 'Read,Glob,Grep', '--allowedTools', 'Read', 'Glob', 'Grep',
-      '--append-system-prompt', WORKER_INSTRUCTIONS, '--model', model, '--', task],
-    timeoutMs: remainingMs, signal, stdoutPath: path.join(logs, 'events.jsonl'), stderrPath: path.join(logs, 'stderr.log'), onLine: audit.ingest });
+      '--append-system-prompt', WORKER_INSTRUCTIONS, '--model', model,
+      ...(onTextDelta ? ['--include-partial-messages'] : []), '--', task],
+    timeoutMs: remainingMs, signal, stdoutPath: path.join(logs, 'events.jsonl'), stderrPath: path.join(logs, 'stderr.log'), onLine });
   const report = { schema: 'agent-bridge/result/1', runId, ...audit.finish(execution), mode: 'read-only', execution, logs };
   await writeFile(path.join(logs, 'result.json'), JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
   return report;

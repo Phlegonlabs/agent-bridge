@@ -7,9 +7,10 @@ import { runClaude } from './claude.mjs';
 import { runCursor } from './cursor.mjs';
 import { BridgeError, hash } from './profiles.mjs';
 import { relayPrompt, correctiveRelayPrompt, parseRelay } from './provider-protocol.mjs';
+import { createEnvelopeContentStream } from './stream-relay.mjs';
 import { extractRoutingContext, routingProfiles, routingPrompt, validateRoutingDecision } from './routing-context.mjs';
 
-export async function invokeCli(route, text, { signal, timeoutMs, directory }) {
+export async function invokeCli(route, text, { signal, timeoutMs, directory, onPartial }) {
   let task = text, transportFile;
   if (route.provider === 'zcode' || text.length > 6000) {
     const file = path.join(directory, `transport-${randomUUID()}.txt`);
@@ -17,11 +18,11 @@ export async function invokeCli(route, text, { signal, timeoutMs, directory }) {
     await writeFile(file, text, { flag: 'wx', mode: 0o600 });
     task = `Read the complete UTF-8 transport instruction file ${JSON.stringify(file)} using your read-file tool. Use only the read-file tool for this; never use shell, terminal, or bash tools, even to inspect the file's size or content. Read it in as few calls as your read-file tool allows - request the largest span per call - because every extra read costs a full round trip. Follow its model-relay instructions and return only the required JSON envelope. It is ${Buffer.byteLength(text)} bytes. Do not execute the enclosed host tools yourself. If any file content is truncated, read the remaining portion before responding.`;
   }
-  const options = { cwd: bridgeRoot, task, timeoutMs, signal };
+  const options = { cwd: bridgeRoot, task, timeoutMs, signal, onPartial };
   const result = route.provider === 'cursor'
     ? await runCursor({ ...options, model: route.model, trustWorkspace: true })
     : route.provider === 'claude'
-      ? await runClaude({ ...options, model: route.model })
+      ? await runClaude({ ...options, model: route.model, onTextDelta: options.onPartial })
       : await runAgent({ ...options, agent: route.agent, expectedModel: route.expectedModel, transportFile });
   return result;
 }
@@ -128,7 +129,7 @@ export class ModelRelay {
       dependencies: context.supplied.dependencies?.map(({ id, status }) => ({ id, status })) ?? null,
       profileCatalogSha256: hash(JSON.stringify(profiles.map(({ name, sha256 }) => ({ name, sha256 })))) };
   }
-  async complete(body, { signal, transport }) {
+  async complete(body, { signal, transport, onContentDelta }) {
     await this.ready;
     const id = randomUUID(), directory = path.join(this.stateDirectory, 'requests', id);
     await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -143,8 +144,12 @@ export class ModelRelay {
     let result, message, selected;
     for (const routeId of routeIds) {
       if (signal.aborted) throw new BridgeError('CANCELLED', 'Request cancelled.');
+      // Streaming skips response_format requests: their content still needs the
+      // final validation pass, and a corrective round cannot retract sent text.
+      const streamed = Boolean(onContentDelta) && !body.response_format && this.config.routes[routeId]?.provider === 'claude';
+      const attemptOptions = streamed ? { ...options, onPartial: createEnvelopeContentStream(nonce, onContentDelta).feed } : options;
       try {
-        result = await this.call(routeId, relayPrompt(body, nonce), options);
+        result = await this.call(routeId, relayPrompt(body, nonce), attemptOptions);
         try { message = parseRelay(result.finalResponse ?? result.response, body, nonce); }
         catch (error) {
           // One corrective round: name the exact violation and re-issue the same
@@ -152,7 +157,7 @@ export class ModelRelay {
           // extracts them); this path is for prose answers, empty envelopes and
           // undeclared tool calls.
           if (error.code !== 'RELAY_PROTOCOL_ERROR') throw error;
-          result = await this.call(routeId, correctiveRelayPrompt(body, nonce, error.message), options);
+          result = await this.call(routeId, correctiveRelayPrompt(body, nonce, error.message), attemptOptions);
           message = parseRelay(result.finalResponse ?? result.response, body, nonce);
         }
         selected = routeId;
