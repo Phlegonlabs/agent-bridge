@@ -6,6 +6,8 @@ Run existing ZCode agent profiles from the official app's Dynamic Workflow comma
 
 Cursor Agent CLI is also available as a worker with `--provider cursor --model composer-2.5`. It uses its own Cursor account and native ask mode. See [Cursor setup and usage](docs/cursor.md); the combined saved workflow is `glm-cursor-probe`.
 
+Claude Code is available as a provider via the native CLI: routes `claude-opus-5-5` and `claude-sonnet-5-5` spawn the official `claude` binary headless (`-p --output-format stream-json`, read-only tools, no MCP) using the machine's existing OAuth login. Both routes are explicit-selection only (`auto: false`) to protect subscription quota; the `claude` pool is capped at 4 concurrent runs and result `api_error_status: 429` triggers the shared cooldown. The runtime resolver rejects npm `.cmd` shims, which Node cannot spawn without a shell.
+
 For native model-dropdown routing with roles, stages and dependencies, select the saved workflow `role-auto-route` with Sub Agent Model `workflow-bridge/workflow-auto`, reasoning `default`. It learns role boundaries from the existing personal profiles and plans a task graph. See [role routing and current limits](docs/role-routing.md).
 
 The earlier CLI-worker workflow `model-bridge` remains available. It supports routing within its saved worker/model allowlist, a parallel limit of 14, and configurable fallback that is off by default. See [saved execution settings](docs/workflow-presets.md).

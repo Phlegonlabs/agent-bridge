@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { bridgeRoot } from './account.mjs';
 import { runAgent } from './bridge.mjs';
+import { runClaude } from './claude.mjs';
 import { runCursor } from './cursor.mjs';
 import { BridgeError, hash } from './profiles.mjs';
 import { relayPrompt, correctiveRelayPrompt, parseRelay } from './provider-protocol.mjs';
@@ -19,7 +20,9 @@ export async function invokeCli(route, text, { signal, timeoutMs, directory }) {
   const options = { cwd: bridgeRoot, task, timeoutMs, signal };
   const result = route.provider === 'cursor'
     ? await runCursor({ ...options, model: route.model, trustWorkspace: true })
-    : await runAgent({ ...options, agent: route.agent, expectedModel: route.expectedModel, transportFile });
+    : route.provider === 'claude'
+      ? await runClaude({ ...options, model: route.model })
+      : await runAgent({ ...options, agent: route.agent, expectedModel: route.expectedModel, transportFile });
   return result;
 }
 // Only machine errors count as rate limits; user/model prose must not reduce capacity.
@@ -28,11 +31,14 @@ export async function isRateLimited(result) {
 }
 export async function rateLimitDetails(result) {
   if (['RATE_LIMITED', 'rate_limited', '1302', '1308'].includes(result.code)) return { retryAfterMs: 15000, quota: result.code === '1308' };
-  if (!result.logs || !['CLI_FAILED', 'AGENT_FAILED', 'CURSOR_CLI_FAILED', 'CHILD_RESULT_UNVERIFIED'].includes(result.code)) return false;
+  if (!result.logs || !['CLI_FAILED', 'AGENT_FAILED', 'CURSOR_CLI_FAILED', 'CLAUDE_CLI_FAILED', 'CLAUDE_RESULT_FAILED', 'CHILD_RESULT_UNVERIFIED'].includes(result.code)) return false;
   let text; try { text = await readFile(path.join(result.logs, 'events.jsonl'), 'utf8'); } catch { return false; }
   for (const line of text.split('\n')) {
     let event; try { event = JSON.parse(line); } catch { continue; }
     const p = event.payload;
+    if (event.type === 'result' && (event.api_error_status === 429 || event.api_error_status === '429')) {
+      return { retryAfterMs: 15000, quota: false };
+    }
     if (p?.type === 'model_request_failed' && (p.statusCode === 429 || p.reason === 'rate_limited')) {
       return { retryAfterMs: Number.isFinite(p.retryAfterMs) ? p.retryAfterMs : 15000, quota: String(p.providerErrorCode) === '1308' };
     }

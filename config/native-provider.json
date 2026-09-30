@@ -4,7 +4,8 @@
   "globalLimit": 14,
   "limits": {
     "zcode": 2,
-    "cursor": 12
+    "cursor": 12,
+    "claude": 4
   },
   "attemptTimeoutMs": 420000,
   "requestTimeoutMs": 540000,
@@ -48,6 +49,20 @@
       "model": "kimi-k3-high",
       "description": "Kimi K3 High via Cursor CLI. Available in the current account catalog; verify on first use.",
       "auto": true
+    },
+    "claude-opus-5-5": {
+      "provider": "claude",
+      "model": "claude-opus-5-5",
+      "description": "Claude Opus 5.5 via the native Claude Code CLI (OAuth subscription). Explicit selection only; not in the auto rotation to protect subscription quota.",
+      "expectedModel": "claude/claude-opus-5-5",
+      "auto": false
+    },
+    "claude-sonnet-5-5": {
+      "provider": "claude",
+      "model": "claude-sonnet-5-5",
+      "description": "Claude Sonnet 5.5 via the native Claude Code CLI (OAuth subscription). Explicit selection only; not in the auto rotation to protect subscription quota.",
+      "expectedModel": "claude/claude-sonnet-5-5",
+      "auto": false
     }
   }
 }

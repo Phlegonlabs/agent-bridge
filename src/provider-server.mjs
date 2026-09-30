@@ -32,6 +32,7 @@ export function validateProviderConfig(config) {
     if (!/^[a-z][a-z0-9._-]{0,100}$/.test(id) || id === 'workflow-auto' || typeof route.description !== 'string' || route.description.length > 500 ||
         route.auto !== undefined && typeof route.auto !== 'boolean') fail();
     if (route.provider === 'cursor') { if (typeof route.model !== 'string' || !/^[a-z0-9._-]+$/.test(route.model) || route.model === 'auto') fail(); }
+    else if (route.provider === 'claude') { if (typeof route.model !== 'string' || !/^[a-z0-9._-]+$/.test(route.model) || route.model === 'auto') fail(); }
     else if (route.provider === 'zcode') { if (typeof route.agent !== 'string' || typeof route.expectedModel !== 'string' || !route.expectedModel.includes('/')) fail(); }
     else fail();
     if (!Object.hasOwn(config.limits, route.pool ?? route.provider) ||
