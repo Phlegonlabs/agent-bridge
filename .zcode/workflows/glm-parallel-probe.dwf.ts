@@ -1,6 +1,6 @@
 /* zcode-workflow
 description: 同時驗證 code_explorer 的 GLM-5.3-Flash 和 reviewer 的 GLM-5.3
-whenToUse: 在 zcode-workflow-bridge 專案確認 GLM 多模型橋接是否可用
+whenToUse: 在 agent-bridge 專案確認 GLM 多模型橋接是否可用
 */
 phase("並行驗證兩個 GLM Agent");
 

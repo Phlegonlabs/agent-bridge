@@ -1,4 +1,4 @@
-# ZCode Workflow Bridge
+# Agent Bridge
 
 For the native model dropdown, use the registered **Cursor Bridge → workflow-auto** provider. Native ZCode-to-Cursor routing has been verified, so every exposed route is Cursor. GLM's model-protocol relay fails its exact-dispatch audit, so GLM Flash and GLM-5.3 are not offered as bridge routes. See [native provider setup and status](docs/native-provider.md).
 

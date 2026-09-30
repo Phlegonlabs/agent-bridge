@@ -49,7 +49,7 @@ export async function runAgent({ agent, cwd, task, expectedModel, timeoutMs = 60
   try {
     if (hash(await readFile(profile.source, 'utf8')) !== profile.sha256) report = { ok: false, code: 'PROFILE_CHANGED', agent };
   } catch { report = { ok: false, code: 'PROFILE_CHANGED', agent }; }
-  const result = { schema: 'zcode-workflow-bridge/result/1', runId, ...report,
+  const result = { schema: 'agent-bridge/result/1', runId, ...report,
     profile: publicProfile(profile), execution, logs: runDirectory };
   await writeFile(path.join(runDirectory, 'result.json'), JSON.stringify(result, null, 2), { flag: 'wx', mode: 0o600 });
   return result;

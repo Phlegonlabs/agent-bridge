@@ -78,7 +78,7 @@ export async function runCursor({ cwd, task, model, cursorDir, timeoutMs = 60000
     args: [...runtime.prefix, '--print', '--output-format', 'stream-json', '--mode', 'ask',
       '--model', model, '--workspace', workspace, ...(trustWorkspace ? ['--trust'] : []), '--', task],
     timeoutMs: remainingMs, signal, stdoutPath: path.join(logs, 'events.jsonl'), stderrPath: path.join(logs, 'stderr.log'), onLine: audit.ingest });
-  const report = { schema: 'zcode-workflow-bridge/result/1', runId, ...audit.finish(execution), mode: 'ask', execution, logs };
+  const report = { schema: 'agent-bridge/result/1', runId, ...audit.finish(execution), mode: 'ask', execution, logs };
   await writeFile(path.join(logs, 'result.json'), JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
   return report;
 }

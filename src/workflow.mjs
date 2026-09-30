@@ -168,7 +168,7 @@ export async function runWorkflow({ name, preset, jobs, ...options }) {
   await mkdir(logs, { recursive: true, mode: 0o700 });
   await writeFile(path.join(logs, 'request.json'), JSON.stringify({ name, preset,
     jobs: jobs.map(({ id, worker, task }) => ({ id, worker, taskSha256: hash(task) })) }, null, 2), { flag: 'wx', mode: 0o600 });
-  const report = { schema: 'zcode-workflow-bridge/workflow/1', runId, preset: name,
+  const report = { schema: 'agent-bridge/workflow/1', runId, preset: name,
     ...await executeJobs({ preset, jobs, ...options }), logs };
   await writeFile(path.join(logs, 'result.json'), JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
   return report;

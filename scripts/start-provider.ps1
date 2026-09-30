@@ -4,7 +4,7 @@ $BridgeDirectory = Split-Path -Parent $PSScriptRoot
 $Config = Get-Content -LiteralPath (Join-Path $BridgeDirectory 'config/native-provider.json') -Raw | ConvertFrom-Json
 try {
     $Health = Invoke-RestMethod -Uri "http://127.0.0.1:$($Config.port)/health" -TimeoutSec 2
-    if ($Health.service -eq 'zcode-workflow-bridge' -and $Health.ready) {
+    if ($Health.service -eq 'agent-bridge' -and $Health.ready) {
         Write-Output "Provider is already running on port $($Config.port)."
         exit 0
     }
@@ -21,7 +21,7 @@ for ($Attempt = 0; $Attempt -lt 30; $Attempt++) {
     if ($Process.HasExited) { throw "Provider exited. Check .bridge/provider/server-$RunStamp.stderr.log" }
     try {
         $Health = Invoke-RestMethod -Uri "http://127.0.0.1:$($Config.port)/health" -TimeoutSec 1
-        if ($Health.service -eq 'zcode-workflow-bridge' -and $Health.ready) {
+        if ($Health.service -eq 'agent-bridge' -and $Health.ready) {
             Write-Output "Provider ready on port $($Config.port); PID $($Process.Id)."
             exit 0
         }

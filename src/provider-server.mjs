@@ -76,7 +76,7 @@ export function createProviderServer({ config, token, relay, pool = new Provider
     let timer, heartbeat, controller;
     try {
       if (req.headers.origin || !/^(127\.0\.0\.1|localhost):\d+$/.test(req.headers.host ?? '')) { send(res, 403, { error: { message: 'Loopback clients only.', type: 'access_denied' } }); return; }
-      if (req.method === 'GET' && req.url === '/health') { send(res, 200, { service: 'zcode-workflow-bridge', version: 1, ready: !pool.stopped }); return; }
+      if (req.method === 'GET' && req.url === '/health') { send(res, 200, { service: 'agent-bridge', version: 1, ready: !pool.stopped }); return; }
       const actual = Buffer.from(req.headers.authorization ?? ''), expected = Buffer.from(`Bearer ${token}`);
       if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) { send(res, 401, { error: { message: 'Invalid local provider key.', type: 'authentication_error' } }); return; }
       if (req.method === 'POST' && req.url === '/shutdown') { send(res, 202, { stopping: true }); void server.shutdown(); return; }
