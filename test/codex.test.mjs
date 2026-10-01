@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { link, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { link, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createCodexAudit } from '../src/codex-audit.mjs';
@@ -28,14 +28,25 @@ async function codexFixture() {
   }));
   const runtime = path.join(home, process.platform === 'win32' ? 'codex.exe' : 'codex');
   try { await link(process.execPath, runtime); } catch { await writeFile(runtime, await readFile(process.execPath)); }
+  const sessions = path.join(home, 'sessions', '2026', '10', '01');
+  await mkdir(sessions, { recursive: true });
+  await writeFile(path.join(sessions, 'rollout-test-fake-thread.jsonl'), [
+    JSON.stringify({ type: 'session_meta', payload: { session_id: 'fake-thread' } }),
+    JSON.stringify({ type: 'turn_context', payload: { model, effort: 'high' } }),
+  ].join('\n') + '\n');
   // The fake native runtime is Node itself. It finds this extensionless `exec`
-  // script in the run workspace and reports the exact argument vector it received.
+  // script, consumes stdin, and reports both argument vector and prompt evidence.
   await writeFile(path.join(workspace, 'exec'), `
 const args = process.argv.slice(2);
-const event = value => process.stdout.write(JSON.stringify(value) + '\\n');
-event({ type: 'thread.started', thread_id: 'fake-thread' });
-event({ type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify(args) } });
-event({ type: 'turn.completed', usage: {} });
+let prompt = '';
+process.stdin.setEncoding('utf8');
+process.stdin.on('data', chunk => { prompt += chunk; });
+process.stdin.on('end', () => {
+  const event = value => process.stdout.write(JSON.stringify(value) + '\\n');
+  event({ type: 'thread.started', thread_id: 'fake-thread' });
+  event({ type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify({ args, prompt }) } });
+  event({ type: 'turn.completed', usage: {} });
+});
 `);
   return { home, workspace, runtime };
 }
@@ -97,7 +108,7 @@ test('Codex reports CLI failure and timeouts', () => {
 test('runCodex validates model, task, and timeout before touching the runtime', async () => {
   await assert.rejects(runCodex({ cwd: '.', task: 'x', model: 'auto' }), { code: 'CODEX_MODEL_REQUIRED' });
   await assert.rejects(runCodex({ cwd: '.', task: '', model }), { code: 'INVALID_TASK' });
-  await assert.rejects(runCodex({ cwd: '.', task: 'x'.repeat(32769), model }), { code: 'INVALID_TASK' });
+  await assert.rejects(runCodex({ cwd: '.', task: 'x'.repeat(4 * 1024 * 1024 + 1), model }), { code: 'INVALID_TASK' });
   await assert.rejects(runCodex({ cwd: '.', task: 'x', model, timeoutMs: 50 }), { code: 'INVALID_TIMEOUT' });
   await assert.rejects(runCodex({ cwd: '.', task: 'x', model, timeoutMs: 700000 }), { code: 'INVALID_TIMEOUT' });
 });
@@ -109,19 +120,28 @@ test('runCodex validates catalog effort and forwards the exact config override',
       { code: 'CODEX_EFFORT_INVALID' });
     await assert.rejects(runCodex({ cwd: workspace, task: 'test', model, effort: 'ultra' }),
       { code: 'CODEX_EFFORT_UNAVAILABLE' });
-    const requested = await runCodex({ cwd: workspace, task: 'test', model, effort: 'high', timeoutMs: 1000, codexBin: runtime });
-    assert.equal(requested.code, 'CODEX_SESSION_UNVERIFIED');
+    const task = 'x'.repeat(32769);
+    const requested = await runCodex({ cwd: workspace, task, model, effort: 'high', timeoutMs: 1000, codexBin: runtime });
+    assert.equal(requested.ok, true);
+    assert.equal(requested.code, 'VERIFIED');
+    assert.equal(requested.actualEffort, 'high');
     const events = (await readFile(path.join(requested.logs, 'events.jsonl'), 'utf8')).trim()
       .split('\n').map(line => JSON.parse(line));
-    const args = JSON.parse(events.find(event => event.type === 'item.completed').item.text);
+    const evidence = JSON.parse(events.find(event => event.type === 'item.completed').item.text);
+    const args = evidence.args;
+    assert.equal(args.at(-1), '-');
+    assert.equal(args.includes(task), false);
+    assert.equal(evidence.prompt, task);
     const overrideAt = args.indexOf('-c');
     assert.equal(args[overrideAt + 1], 'model_reasoning_effort="high"');
     assert.equal(JSON.parse(await readFile(path.join(requested.logs, 'request.json'), 'utf8')).requestedEffort, 'high');
 
     const defaulted = await runCodex({ cwd: workspace, task: 'test', model, timeoutMs: 1000, codexBin: runtime });
+    assert.equal(defaulted.ok, true);
+    assert.equal(defaulted.actualEffort, 'high');
     const defaultEvents = (await readFile(path.join(defaulted.logs, 'events.jsonl'), 'utf8')).trim()
       .split('\n').map(line => JSON.parse(line));
-    const defaultArgs = JSON.parse(defaultEvents.find(event => event.type === 'item.completed').item.text);
+    const defaultArgs = JSON.parse(defaultEvents.find(event => event.type === 'item.completed').item.text).args;
     assert.equal(defaultArgs.includes('model_reasoning_effort="high"'), false);
     assert.equal(JSON.parse(await readFile(path.join(defaulted.logs, 'request.json'), 'utf8')).requestedEffort, null);
   });

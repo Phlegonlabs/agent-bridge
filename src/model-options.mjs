@@ -83,7 +83,11 @@ export function reasoningOptionSpec(route) {
   return { values: metadata.values, map: '{"reasoning_effort": reasoningLevel}' };
 }
 
-export async function codexModelCatalog(codexHome = process.env.CODEX_HOME ?? path.join(homedir(), '.codex')) {
+export function codexHomeDirectory(codexHome = process.env.CODEX_HOME || path.join(homedir(), '.codex')) {
+  return codexHome;
+}
+
+export async function codexModelCatalog(codexHome = codexHomeDirectory()) {
   const file = path.join(codexHome, 'models_cache.json');
   let text;
   try {

@@ -2,13 +2,12 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { glob, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { bridgeRoot } from './account.mjs';
 import { BridgeError, hash } from './profiles.mjs';
 import { runProcess } from './process.mjs';
 import { createCodexAudit } from './codex-audit.mjs';
-import { codexModelCatalog, normalizeEffortValue, selectCodexModel } from './model-options.mjs';
+import { codexHomeDirectory, codexModelCatalog, normalizeEffortValue, selectCodexModel } from './model-options.mjs';
 
 const execute = promisify(execFile);
 const SHIM_EXTENSIONS = new Set(['.cmd', '.bat', '.ps1']);
@@ -32,8 +31,8 @@ export async function codexRuntime(resolved = process.env.CODEX_BRIDGE_BIN) {
 
 // exec --json events never name the model; the persisted session rollout does.
 // Locate rollout-<timestamp>-<threadId>.jsonl and confirm its turn_context model.
-async function verifyRollout(threadId) {
-  const pattern = path.join(homedir(), '.codex', 'sessions', '*', '*', '*', `rollout-*-${threadId}.jsonl`)
+async function verifyRollout(threadId, codexHome = codexHomeDirectory()) {
+  const pattern = path.join(codexHome, 'sessions', '*', '*', '*', `rollout-*-${threadId}.jsonl`)
     .split(path.sep).join('/');
   for (let attempt = 0; attempt < 3; attempt++) {
     const files = [];
@@ -66,7 +65,9 @@ async function verifyRollout(threadId) {
 
 export async function runCodex({ cwd, task, model, effort, timeoutMs = 60000, signal, codexBin }) {
   if (typeof model !== 'string' || !model || model === 'auto') throw new BridgeError('CODEX_MODEL_REQUIRED', 'Choose an explicit Codex model id, for example gpt-6.1-sol.');
-  if (typeof task !== 'string' || !task.trim() || Buffer.byteLength(task) > 32768) throw new BridgeError('INVALID_TASK', 'Task must be 1..32768 bytes.');
+  if (typeof task !== 'string' || !task.trim() || Buffer.byteLength(task) > 4 * 1024 * 1024) {
+    throw new BridgeError('INVALID_TASK', 'Task must be 1..4194304 bytes.');
+  }
   if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 600000) throw new BridgeError('INVALID_TIMEOUT', 'Timeout must be 100..600000 ms.');
   let requestedEffort;
   try { requestedEffort = normalizeEffortValue(effort); }
@@ -74,7 +75,8 @@ export async function runCodex({ cwd, task, model, effort, timeoutMs = 60000, si
   const deadline = Date.now() + timeoutMs;
   const workspace = await realpath(cwd);
   if (!(await stat(workspace)).isDirectory()) throw new BridgeError('INVALID_CWD', 'Workspace must be a directory.');
-  const catalog = await codexModelCatalog();
+  const codexHome = codexHomeDirectory();
+  const catalog = await codexModelCatalog(codexHome);
   const selected = selectCodexModel(catalog.models, model, requestedEffort);
   const runtime = await codexRuntime(codexBin);
   const runId = randomUUID();
@@ -93,12 +95,13 @@ export async function runCodex({ cwd, task, model, effort, timeoutMs = 60000, si
       '--skip-git-repo-check', '-C', workspace, '-m', model,
       ...(requestedEffort !== null ? ['-c', `model_reasoning_effort="${requestedEffort}"`] : []),
       '-c', 'mcp_servers={}',
-      '--', task],
-    timeoutMs: remainingMs, signal, stdoutPath: path.join(logs, 'events.jsonl'), stderrPath: path.join(logs, 'stderr.log'),
+      '--', '-'],
+    timeoutMs: remainingMs, signal, stdinText: task,
+    stdoutPath: path.join(logs, 'events.jsonl'), stderrPath: path.join(logs, 'stderr.log'),
     onLine: line => audit.ingest(line) });
   // A missing or ambiguous rollout means the dispatch cannot be verified; the
   // audit then fails CODEX_SESSION_UNVERIFIED instead of guessing.
-  const rollout = await verifyRollout(audit.threadId)
+  const rollout = await verifyRollout(audit.threadId, codexHome)
     .catch(() => ({ sessionConfirmed: false, reportedModel: undefined, reportedEffort: undefined }));
   const report = { schema: 'agent-bridge/result/1', runId, ...audit.finish(execution, rollout), mode: 'read-only', execution, logs };
   await writeFile(path.join(logs, 'result.json'), JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
