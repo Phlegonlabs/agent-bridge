@@ -8,7 +8,6 @@ import { runCursor } from './cursor.mjs';
 import { BridgeError, hash } from './profiles.mjs';
 import { relayPrompt, correctiveRelayPrompt, parseRelay } from './provider-protocol.mjs';
 import { createEnvelopeContentStream } from './stream-relay.mjs';
-import { extractRoutingContext, routingProfiles, routingPrompt, validateRoutingDecision } from './routing-context.mjs';
 
 export async function invokeCli(route, text, { signal, timeoutMs, directory, onPartial }) {
   let task = text, transportFile;
@@ -51,9 +50,8 @@ export async function rateLimitDetails(result) {
   return false;
 }
 export class ModelRelay {
-  constructor(config, pool, invoke = invokeCli, loadProfiles = routingProfiles, stateDirectory = path.join(bridgeRoot, '.bridge', 'provider')) {
-    this.config = config; this.pool = pool; this.invoke = invoke; this.sessions = new Map();
-    this.loadProfiles = loadProfiles; this.stateDirectory = stateDirectory;
+  constructor(config, pool, invoke = invokeCli, stateDirectory = path.join(bridgeRoot, '.bridge', 'provider')) {
+    this.config = config; this.pool = pool; this.invoke = invoke; this.stateDirectory = stateDirectory;
     this.ready = Promise.all(Object.keys(pool.groups).map(async name => {
       try {
         const state = JSON.parse(await readFile(this.limitFile(name), 'utf8'));
@@ -63,15 +61,6 @@ export class ModelRelay {
   }
   limitFile(name) { return path.join(this.stateDirectory, `cooldown-${name}.json`); }
   poolName(route) { return route.pool ?? route.provider; }
-  capacityState(routeId) {
-    const group = this.pool.groups[this.poolName(this.config.routes[routeId])];
-    return group.cooldownUntil > Date.now() ? 'provider-cooldown' : group.active >= group.limit ? 'provider-full' : 'available';
-  }
-  remember(decision) {
-    if (!decision.key) return;
-    if (!this.sessions.has(decision.key) && this.sessions.size >= 256) this.sessions.delete(this.sessions.keys().next().value);
-    this.sessions.set(decision.key, decision);
-  }
   async call(routeId, prompt, options) {
     const route = this.config.routes[routeId], poolName = this.poolName(route);
     if (this.pool.groups[poolName].cooldownUntil > Date.now() + options.timeoutMs) throw new BridgeError('RATE_LIMITED', 'This capacity pool is cooling down until its reported reset. No model switch was performed.');
@@ -94,52 +83,15 @@ export class ModelRelay {
       return result;
     } finally { release(); }
   }
-  async choose(body, options) {
-    const context = extractRoutingContext(body, options.transport), key = context.key;
-    const blocked = context.supplied.dependencies?.filter(dep => dep.status !== 'completed');
-    if (blocked?.length) throw new BridgeError('DEPENDENCIES_NOT_READY', `Workflow must complete upstream tasks first: ${blocked.map(dep => dep.id).join(', ')}.`);
-    const prior = this.sessions.get(key);
-    const capacityAware = this.config.capacityRouting === true;
-    const capacityAtSelection = this.pool.snapshot();
-    const priorState = prior ? this.capacityState(prior.route) : undefined;
-    if (prior && (!capacityAware || priorState === 'available')) return { ...prior, reason: 'conversation-route', reused: true, key, capacityAction: 'reuse', previousRoute: undefined, switchReason: undefined };
-    const eligible = Object.entries(this.config.routes).filter(([, route]) => route.auto !== false && this.pool.groups[this.poolName(route)].cooldownUntil <= Date.now());
-    const available = eligible.filter(([id]) => this.capacityState(id) === 'available');
-    // With no available alternative, retain the current healthy provider and use the bounded queue.
-    if (prior && priorState === 'provider-full' && !available.length) return { ...prior, reason: 'all-eligible-providers-busy', reused: true, key, capacityAction: 'wait', previousRoute: undefined, switchReason: undefined };
-    const choices = (capacityAware && available.length ? available : eligible)
-      .map(([id, route]) => ({ id, description: route.description, model: route.expectedModel ?? `cursor/${route.model}`,
-        pool: this.poolName(route), capacity: { ...this.pool.groups[this.poolName(route)] } }));
-    if (!choices.length) throw new BridgeError('RATE_LIMITED', 'All eligible routes are cooling down.');
-    const profiles = await this.loadProfiles();
-    context.capacityRouting = { enabled: capacityAware, previousRoute: prior?.route ?? null, previousState: priorState ?? null,
-      previousPool: prior ? this.poolName(this.config.routes[prior.route]) : null,
-      selectionPolicy: capacityAware ? 'Use available capacity pools first. Models from the same provider can have separate pools. Only choose a busy pool when every eligible pool is busy; its request will queue.' : 'Keep the existing route.' };
-    const prompt = routingPrompt(context, profiles, choices);
-    const result = await this.call(this.config.router, prompt, options);
-    let decision;
-    try { decision = JSON.parse((result.finalResponse ?? result.response).trim().replace(/^```(?:json)?\s*/, '').replace(/\s*```$/, '')); } catch { throw new BridgeError('ROUTING_FAILED', 'The router did not return a valid selection.'); }
-    const selected = validateRoutingDecision(decision, context, choices);
-    return { ...selected, key, routerRunId: result.runId, contextSource: context.source, missingContext: context.missing,
-      ...(prior ? { previousRoute: prior.route, switchReason: priorState } : {}),
-      selectedPool: this.poolName(this.config.routes[selected.route]),
-      capacityAction: capacityAware && !available.length ? 'wait' : prior ? 'reselect' : 'select',
-      capacityAtSelection,
-      workflowId: context.supplied.workflowId, actorId: context.supplied.actorId, taskId: context.supplied.taskId,
-      dependencies: context.supplied.dependencies?.map(({ id, status }) => ({ id, status })) ?? null,
-      profileCatalogSha256: hash(JSON.stringify(profiles.map(({ name, sha256 }) => ({ name, sha256 })))) };
-  }
   async complete(body, { signal, transport, onContentDelta }) {
     await this.ready;
     const id = randomUUID(), directory = path.join(this.stateDirectory, 'requests', id);
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const options = { signal, timeoutMs: this.config.attemptTimeoutMs, directory, transport };
-    const decision = body.model === 'workflow-auto' ? await this.choose(body, options) : { route: body.model, reason: 'explicit-model' };
+    const decision = { route: body.model, reason: 'explicit-model' };
     const nonce = randomUUID();
     await writeFile(path.join(directory, 'routing.json'), JSON.stringify({ id, requestedModel: body.model, ...decision,
       requestSha256: hash(JSON.stringify(body)) }, null, 2), { flag: 'wx', mode: 0o600 });
-    // Pin before execution so a failed request cannot silently reroll a healthy route on retry.
-    this.remember(decision);
     const attempts = [], routeIds = [decision.route, ...(this.config.fallback.enabled ? this.config.fallback.routes[decision.route] ?? [] : [])];
     let result, message, selected;
     for (const routeId of routeIds) {
@@ -168,7 +120,6 @@ export class ModelRelay {
         if (!this.config.fallback.enabled || !this.config.fallback.on.includes(error.code) || routeId === routeIds.at(-1)) throw error;
       }
     }
-    this.remember({ ...decision, route: selected });
     const evidence = { id, requestedModel: body.model, selected, actualModel: result.actualModel, workerRunId: result.runId, attempts,
       modelEvidence: result.modelEvidence ?? 'native-child-model-request', response: message };
     await writeFile(path.join(directory, 'result.json'), JSON.stringify(evidence, null, 2), { flag: 'wx', mode: 0o600 });

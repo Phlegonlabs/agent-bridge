@@ -26,11 +26,9 @@ export function validateProviderConfig(config) {
       limit !== null && (!Number.isInteger(limit) || limit < 1 || limit > 14)) fail();
   if (!Number.isInteger(config.attemptTimeoutMs) || config.attemptTimeoutMs < 1000 || config.attemptTimeoutMs > 540000 ||
       !Number.isInteger(config.requestTimeoutMs) || config.requestTimeoutMs < config.attemptTimeoutMs || config.requestTimeoutMs > 540000) fail();
-  if (config.capacityRouting !== undefined && typeof config.capacityRouting !== 'boolean') fail();
-  if (!config.routes || typeof config.routes !== 'object' || Array.isArray(config.routes) || Object.keys(config.routes).length > 64 || !Object.hasOwn(config.routes, config.router)) fail();
+  if (!config.routes || typeof config.routes !== 'object' || Array.isArray(config.routes) || Object.keys(config.routes).length > 64) fail();
   for (const [id, route] of Object.entries(config.routes)) {
-    if (!/^[a-z][a-z0-9._-]{0,100}$/.test(id) || id === 'workflow-auto' || typeof route.description !== 'string' || route.description.length > 500 ||
-        route.auto !== undefined && typeof route.auto !== 'boolean') fail();
+    if (!/^[a-z][a-z0-9._-]{0,100}$/.test(id) || typeof route.description !== 'string' || route.description.length > 500) fail();
     if (route.provider === 'cursor') { if (typeof route.model !== 'string' || !/^[a-z0-9._-]+$/.test(route.model) || route.model === 'auto') fail(); }
     else if (route.provider === 'claude') { if (typeof route.model !== 'string' || !/^[a-z0-9._-]+$/.test(route.model) || route.model === 'auto') fail(); }
     else if (route.provider === 'zcode') { if (typeof route.agent !== 'string' || typeof route.expectedModel !== 'string' || !route.expectedModel.includes('/')) fail(); }
@@ -71,7 +69,7 @@ export function createProviderServer({ config, token, relay, pool = new Provider
   validateProviderConfig(config);
   relay ??= new ModelRelay(config, pool);
   const controllers = new Set();
-  const modelIds = ['workflow-auto', ...Object.keys(config.routes)];
+  const modelIds = Object.keys(config.routes);
   const send = (res, status, value) => { if (!res.destroyed) { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); } };
   const server = http.createServer(async (req, res) => {
     let timer, heartbeat, controller;
@@ -82,7 +80,7 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) { send(res, 401, { error: { message: 'Invalid local provider key.', type: 'authentication_error' } }); return; }
       if (req.method === 'POST' && req.url === '/shutdown') { send(res, 202, { stopping: true }); void server.shutdown(); return; }
       if (req.method === 'GET' && req.url === '/v1/models') { send(res, 200, { object: 'list', data: modelIds.map(id => ({ id, object: 'model', created: 0, owned_by: 'local-workflow-bridge' })) }); return; }
-      if (req.method === 'GET' && req.url === '/status') { send(res, 200, { ...pool.snapshot(), capacityRoutingEnabled: config.capacityRouting === true, fallbackEnabled: config.fallback.enabled, routes: modelIds }); return; }
+      if (req.method === 'GET' && req.url === '/status') { send(res, 200, { ...pool.snapshot(), fallbackEnabled: config.fallback.enabled, routes: modelIds }); return; }
       if (req.method !== 'POST' || req.url !== '/v1/chat/completions') { send(res, 404, { error: { message: 'Use /v1/chat/completions.', type: 'not_found' } }); return; }
       if (controllers.size >= 64) throw new BridgeError('QUEUE_FULL', 'Too many queued requests.');
       controller = new AbortController(); controllers.add(controller);

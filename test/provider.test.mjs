@@ -10,7 +10,7 @@ import { createProviderServer, readProviderConfig } from '../src/provider-server
 import { appendProvider } from '../src/provider-registration.mjs';
 const config = await readProviderConfig();
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-const body = { model: 'workflow-auto', messages: [{ role: 'user', content: 'probe' }], tools: [
+const body = { model: 'cursor-composer-2.5', messages: [{ role: 'user', content: 'probe' }], tools: [
   { type: 'function', function: { name: 'read_probe', parameters: { type: 'object', required: ['path'], properties: { path: { type: 'string' } }, additionalProperties: false } } },
 ] };
 test('native registration appends only the new provider and never replaces an existing entry', () => {
@@ -22,10 +22,10 @@ test('native registration appends only the new provider and never replaces an ex
   assert.throws(() => appendProvider(next, config, 'changed'), { code: 'PROVIDER_ALREADY_EXISTS' });
 });
 test('relay protocol validates tools, schemas, required choice and returned nonce', () => {
-  validateChat(body, ['workflow-auto']);
+  validateChat(body, [body.model]);
   const longConversation = { ...body, messages: Array.from({ length: 1024 }, () => body.messages[0]) };
-  validateChat(longConversation, ['workflow-auto']);
-  assert.throws(() => validateChat({ ...longConversation, messages: [...longConversation.messages, body.messages[0]] }, ['workflow-auto']), { code: 'INVALID_REQUEST' });
+  validateChat(longConversation, [body.model]);
+  assert.throws(() => validateChat({ ...longConversation, messages: [...longConversation.messages, body.messages[0]] }, [body.model]), { code: 'INVALID_REQUEST' });
   const valid = { nonce: 'nonce', content: null, tool_calls: [{ name: 'read_probe', arguments: { path: 'README.md' } }] };
   const result = parseRelay(JSON.stringify(valid), body, 'nonce');
   assert.equal(result.tool_calls[0].function.name, 'read_probe');
@@ -60,7 +60,7 @@ test('corrective prompt names the violation and re-attaches the full transport',
 });
 function enframe(inner) { return '```json\n' + inner + '\n```'; }
 const minimalRelayConfig = () => ({ routes: { probe: { provider: 'cursor', model: 'probe-model', pool: 'cursor' } },
-  attemptTimeoutMs: 1000, capacityRouting: false, fallback: { enabled: false, on: [], routes: {} } });
+  attemptTimeoutMs: 1000, fallback: { enabled: false, on: [], routes: {} } });
 // Reply templates may contain {{NONCE}}; the stub fills in the nonce the relay
 // issued for that call, extracted from the prompt it received.
 async function withRelayStub(replyTemplates, run) {
@@ -72,7 +72,7 @@ async function withRelayStub(replyTemplates, run) {
     const nonce = /Required nonce: ([a-f0-9-]+)/.exec(prompt)[1];
     return { runId: `run-${prompts.length}`, ok: true, code: 'VERIFIED', actualModel: 'cursor/probe-model',
       response: (replyTemplates[prompts.length - 1] ?? '').replaceAll('{{NONCE}}', nonce), execution: {} };
-  }, async () => [], state);
+  }, state);
   try { await run(relay, prompts); } finally { await rm(state, { recursive: true, force: true }); pool.close(); }
 }
 test('relay completes in one call when the envelope is merely narrated', async () => {
@@ -104,7 +104,7 @@ test('unsupported media and malformed requests fail before routing', () => {
     { ...body, model: 'absent' }, { ...body, n: 2 }, { ...body, stream: 'yes' },
     { ...body, messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url: 'data:secret' } }] }] },
     { ...body, tools: [...body.tools, ...body.tools] }, { ...body, tool_choice: 'invalid' },
-  ]) assert.throws(() => validateChat(bad, ['workflow-auto']));
+  ]) assert.throws(() => validateChat(bad, [body.model]));
 });
 test('JSON response schema is checked rather than trusted', () => {
   const request = { ...body, response_format: { type: 'json_schema', json_schema: { name: 'answer', schema: { type: 'object', required: ['ok'], properties: { ok: { type: 'boolean' } } } } } };
@@ -115,14 +115,14 @@ test('native draft 2020-12 tool schemas preserve validation including tuple item
     $schema: 'https://json-schema.org/draft/2020-12/schema', type: 'object', required: ['point'],
     properties: { point: { type: 'array', prefixItems: [{ type: 'number' }, { type: 'string' }], items: false, minItems: 2 } },
   } } }] };
-  validateChat(request, ['workflow-auto']);
+  validateChat(request, [body.model]);
   const response = arguments_ => JSON.stringify({ nonce: 'native', content: null, tool_calls: [{ name: 'native_tool', arguments: arguments_ }] });
   assert.equal(parseRelay(response({ point: [1, 'a'] }), request, 'native').tool_calls.length, 1);
   assert.throws(() => parseRelay(response({ point: ['a', 1] }), request, 'native'), { code: 'RELAY_PROTOCOL_ERROR' });
 });
 test('streamed tool calls retain call id, arguments and terminal reason', () => {
   const message = parseRelay('{"nonce":"n","content":null,"tool_calls":[{"name":"read_probe","arguments":{"path":"x"}}]}', body, 'n');
-  const result = completion(message, 'workflow-auto');
+  const result = completion(message, body.model);
   const chunks = streamChunks(result);
   assert.equal(chunks[1].choices[0].delta.tool_calls[0].id, message.tool_calls[0].id);
   assert.equal(chunks.at(-1).choices[0].finish_reason, 'tool_calls');
@@ -181,7 +181,8 @@ test('HTTP endpoint authenticates, rejects browser origins and returns valid SSE
     assert.equal((await fetch(base + '/v1/models')).status, 401);
     assert.equal((await fetch(base + '/v1/models', { headers: { Authorization: 'Bearer test-key', Origin: 'https://example.com' } })).status, 403);
     const models = await (await fetch(base + '/v1/models', { headers: { Authorization: 'Bearer test-key' } })).json();
-    assert.ok(models.data.some(model => model.id === 'workflow-auto'));
+    assert.ok(models.data.some(model => model.id === 'cursor-composer-2.5'));
+    assert.ok(!models.data.some(model => model.id === 'workflow-auto'));
     const response = await fetch(base + '/v1/chat/completions', { method: 'POST', headers: { Authorization: 'Bearer test-key', 'x-session-id': 'native-actor-a', 'x-zcode-session-type': 'subagent' }, body: JSON.stringify({ ...body, stream: true }) });
     const text = await response.text(); assert.equal(response.status, 200); assert.match(text, /PROBE_OK/); assert.match(text, /\[DONE\]/); assert.equal(calls, 1);
     const invalid = await fetch(base + '/v1/chat/completions', { method: 'POST', headers: { Authorization: 'Bearer test-key' }, body: JSON.stringify({ ...body, model: 'absent' }) });

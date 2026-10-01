@@ -6,7 +6,6 @@ import { installedRuntime, runAgent } from '../src/bridge.mjs';
 import { loginAccount } from '../src/account.mjs';
 import { cursorRuntime, cursorDoctor, cursorModels, cursorLogin, runCursor } from '../src/cursor.mjs';
 import { readJsonFile, readPresets, selectPreset, runWorkflow, workflowOutput } from '../src/workflow.mjs';
-import { routingProfiles } from '../src/routing-context.mjs';
 
 const controller = new AbortController();
 process.once('SIGINT', () => controller.abort());
@@ -30,7 +29,7 @@ try {
   if (!['workflow', 'presets'].includes(command) && workflowOnly.some(key => values[key] !== undefined)) throw new BridgeError('INVALID_ARGUMENT', 'Workflow options require workflow or presets.');
   if (['workflow', 'presets'].includes(command) && (values.provider !== 'zcode' || values.agent || values.model || values.cli || values['expected-model'] || values['cursor-dir'] || values['timeout-ms'])) throw new BridgeError('INVALID_ARGUMENT', 'Workflow routes and deadlines come from the preset.');
   if (values.help || !command) {
-    emit({ commands: ['profiles', 'routing-profiles', 'doctor', 'login', 'models', 'run', 'presets', 'workflow'], run: '--agent NAME --cwd DIRECTORY --task-file FILE [--expected-model PROVIDER/MODEL] [--timeout-ms 60000]',
+    emit({ commands: ['profiles', 'doctor', 'login', 'models', 'run', 'presets', 'workflow'], run: '--agent NAME --cwd DIRECTORY --task-file FILE [--expected-model PROVIDER/MODEL] [--timeout-ms 60000]',
       workflow: '--cwd DIRECTORY (--task TEXT | --task-file FILE | --jobs-file FILE | --jobs-json JSON) [--preset NAME] [--workers explorer,reviewer,cursor] [--parallel-limit 14] [--fallback off|configured] [--trust-workspace]',
       cursor: '--provider cursor --model MODEL_ID --cwd DIRECTORY --task-file FILE [--trust-workspace] [--cursor-dir PACKAGE_DIRECTORY]',
       note: 'ZCode expected-model asserts profile identity. Cursor model selects a native model; Cursor runs in ask mode.' });
@@ -62,8 +61,6 @@ try {
     const report = await runWorkflow({ ...selected, jobs, cwd: values.cwd,
       trustWorkspace: values['trust-workspace'], signal: controller.signal });
     emit(workflowOutput(report)); if (!report.ok) process.exitCode = 1;
-  } else if (command === 'routing-profiles') {
-    emit({ profiles: await routingProfiles() });
   } else if (command === 'profiles') {
     if (values.provider !== 'zcode') throw new BridgeError('INVALID_ARGUMENT', 'profiles lists ZCode profiles. Use models --provider cursor for Cursor.');
     emit({ profiles: (await listProfiles()).map(publicProfile) });

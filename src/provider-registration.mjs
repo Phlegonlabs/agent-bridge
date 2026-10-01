@@ -13,7 +13,7 @@ export function appendProvider(existing, config, token) {
   const rules = output.config.providerConfigRules.providerRules;
   const present = rules.find(rule => rule.providerId === nativeProviderId);
   if (present) throw new BridgeError('PROVIDER_ALREADY_EXISTS', 'Provider already exists; preserve it and review changes explicitly.');
-  const models = ['workflow-auto', ...Object.keys(config.routes)];
+  const models = Object.keys(config.routes);
   rules.push({ providerId: nativeProviderId, providerName: 'Cursor Bridge', enabled: true,
     config: { group: 'standard-personal', access: { type: 'api-key', apiKey: token },
       api: { type: 'openai-chat-completions', baseUrl: `http://127.0.0.1:${config.port}/v1` },
@@ -44,7 +44,7 @@ export async function registerProvider(config, token, file = path.join(homedir()
   without.config.modelConfigRules.providerModelRules = without.config.modelConfigRules.providerModelRules.filter(rule => rule.providerId !== nativeProviderId);
   if (Array.isArray(without.config.providerOrder)) without.config.providerOrder = without.config.providerOrder.filter(id => id !== nativeProviderId);
   assert.deepEqual(without, prior);
-  const receipt = { ok: true, providerId: nativeProviderId, models: Object.keys(config.routes).length + 1,
+  const receipt = { ok: true, providerId: nativeProviderId, models: Object.keys(config.routes).length,
     configPath: file, previousSha256: hash(original), registeredSha256: hash(JSON.stringify(saved)), backupDirectory };
   await writeFile(path.join(backupDirectory, 'receipt.json'), JSON.stringify(receipt, null, 2), { flag: 'wx', mode: 0o600 });
   return receipt;
