@@ -6,18 +6,37 @@ import { BridgeError } from './profiles.mjs';
 
 const execute = promisify(execFile);
 
+export function ownedProcessTree(tree, rootPid, startedAt) {
+  const root = tree.find(entry => entry.pid === rootPid);
+  if (!root || Date.parse(root.started) < startedAt - 2000) return [];
+  const owned = [root], seen = new Set([rootPid]);
+  for (let index = 0; index < owned.length; index++) {
+    const parent = owned[index];
+    for (const entry of tree) {
+      if (!seen.has(entry.pid) && entry.parent === parent.pid &&
+          Date.parse(entry.started) >= Date.parse(parent.started)) {
+        seen.add(entry.pid); owned.push(entry);
+      }
+    }
+  }
+  return owned;
+}
+
 export async function terminateOwnedTree(child, startedAt) {
   if (child.exitCode !== null || child.signalCode !== null) return { status: 'already_exited', pid: child.pid };
   if (process.platform === 'win32') {
     const script = `$q = [System.Collections.Generic.Queue[int]]::new(); $q.Enqueue(${child.pid}); $seen = @{}; $rows = @(); while ($q.Count -gt 0 -and $rows.Count -lt 256) { $n = $q.Dequeue(); if ($seen.ContainsKey($n)) { continue }; $seen[$n] = $true; $p = Get-CimInstance Win32_Process -Filter "ProcessId = $n"; if ($p) { $rows += [pscustomobject]@{pid=$p.ProcessId; parent=$p.ParentProcessId; name=$p.Name; started=$p.CreationDate.ToUniversalTime().ToString('o')}; Get-CimInstance Win32_Process -Filter "ParentProcessId = $n" | ForEach-Object { $q.Enqueue([int]$_.ProcessId) } } }; ConvertTo-Json -InputObject @($rows) -Compress`;
     const { stdout } = await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
       { windowsHide: true, timeout: 8000, maxBuffer: 131072 });
-    const tree = JSON.parse(stdout || '[]');
+    const snapshot = JSON.parse(stdout || '[]');
+    const tree = ownedProcessTree(snapshot, child.pid, startedAt);
     const root = tree.find(x => x.pid === child.pid);
+    if (!root && snapshot.some(entry => entry.pid === child.pid)) throw new Error('Owned PID identity could not be verified.');
     if (!root) return { status: 'already_exited', pid: child.pid, tree };
-    if (Date.parse(root.started) < startedAt - 2000) throw new Error('Owned PID identity could not be verified.');
     if (child.exitCode === null && child.signalCode === null) {
-      await execute('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'],
+      const ownedIdentities = tree.map(entry => `@{pid=${entry.pid};started='${entry.started}';name='${entry.name}'}`).join(',');
+      const stop = `foreach ($item in @(${ownedIdentities})) { $p = Get-CimInstance Win32_Process -Filter "ProcessId = $($item.pid)"; if ($p -and $p.CreationDate.ToUniversalTime().ToString('o') -eq $item.started -and $p.Name -eq $item.name) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue } }`;
+      await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', stop],
         { windowsHide: true, timeout: 8000, maxBuffer: 131072 });
     }
     const identities = tree.map(p => `@{pid=${p.pid};started='${p.started}'}`).join(',');
