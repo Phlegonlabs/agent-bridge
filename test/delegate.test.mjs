@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { mkdtemp, rm, stat, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ProviderPool } from '../src/provider-pool.mjs';
-import { ModelRelay, renderDelegation } from '../src/provider-relay.mjs';
+import { ModelRelay, renderDelegation, delegationFingerprint } from '../src/provider-relay.mjs';
 import { validateProviderConfig } from '../src/provider-server.mjs';
 
 const fullConfig = routes => ({ version: 1, port: 32147, globalLimit: 14,
@@ -101,4 +101,44 @@ test('renderDelegation extracts cwd and keeps the header free of relay language'
   assert.equal(cwd, 'C:\\Users\\mps19\\Documents\\GitHub\\agent-bridge');
   assert.ok(task.startsWith('You are handling one task'));
   assert.ok(!/envelope|nonce/i.test(task));
+});
+
+test('full current task survives context spill without clipping', async () => {
+ const state=await mkdtemp(path.join(tmpdir(),'bridge-full-task-'));
+ try {
+  const instruction='Full requirements: '+ 'q'.repeat(40000)+' END_REQUIREMENT';
+  const rendered=await renderDelegation({messages:[{role:'user',content:instruction}]},state);
+  assert.ok(Buffer.byteLength(rendered.task)<32768);
+  const taskFile=JSON.parse(/current task from (".*?")/.exec(rendered.task)[1]);
+  assert.equal(await readFile(taskFile,'utf8'),instruction);
+  assert.ok((await readFile(rendered.contextFile,'utf8')).includes('END_REQUIREMENT'));
+ } finally {await rm(state,{recursive:true,force:true});}
+});
+test('fingerprints exclude stream delivery and normalize key order',()=>{
+ const first={model:'claude-opus-5-5',messages:[{role:'user',content:'do work'}],stream:true};
+ const second={stream:false,messages:[{content:'do work',role:'user'}],model:'claude-opus-5-5'};
+ const selection={model:'claude-opus-5-5',effort:'high'};
+ assert.equal(delegationFingerprint(first,selection),delegationFingerprint(second,selection));
+ assert.notEqual(delegationFingerprint(first,selection),delegationFingerprint(first,{...selection,effort:'low'}));
+});
+test('writable delegate resumes, replays duplicates and forwards effort and tools',async()=>{
+ const state=await mkdtemp(path.join(tmpdir(),'bridge-write-delegate-'));
+ const pool=new ProviderPool({limits:{claude:2}});const calls=[];
+ const route={...delegateRoute,reasoning:{values:['low','high'],default:'high'},
+  execution:{mode:'workspace-write',writeScope:'./**',tools:['Read','Glob','Grep','Edit(./**)','Write(./**)','Bash(node *)']}};
+ const relay=new ModelRelay({routes:{'claude-opus-5-5':route},attemptTimeoutMs:1000,fallback:{enabled:false,on:[],routes:{}}},pool,
+  async(r,task,opts)=>{calls.push({r,opts});return {...stubResponse,response:'finished',sessionId:opts.session.id,sessionResume:opts.session.resume};},state);
+ const first={model:'claude-opus-5-5',reasoning_effort:'low',messages:[{role:'system',content:`working directory: ${state}`},{role:'user',content:'create a file'}]};
+ const opts={signal:new AbortController().signal,transport:{sessionId:'session-a',sessionType:'chat'}};
+ try {
+  await relay.complete(first,opts);await relay.complete({...first,stream:true},opts);
+  await relay.complete({...first,messages:[...first.messages,{role:'user',content:'modify it'}]},opts);
+  assert.equal(calls.length,2);assert.equal(calls[0].opts.effort,'low');
+  assert.equal(calls[0].opts.session.resume,false);assert.equal(calls[1].opts.session.resume,true);
+  assert.equal(calls[1].opts.session.id,calls[0].opts.session.id);
+  assert.equal(calls[0].r.execution.mode,'workspace-write');
+  await assert.rejects(relay.complete({...first,reasoning_effort:'max'},opts),{code:'MODEL_EFFORT_UNSUPPORTED'});
+  await assert.rejects(relay.complete({...first,tool_choice:{type:'function',function:{name:'forced'}}},opts),{code:'UNSUPPORTED_REQUEST'});
+  await assert.rejects(relay.complete({...first,response_format:{type:'json_object'}},opts),{code:'UNSUPPORTED_REQUEST'});
+ } finally {await rm(state,{recursive:true,force:true});pool.close();}
 });

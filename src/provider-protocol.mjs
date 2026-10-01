@@ -18,6 +18,7 @@ export function validateChat(body, models) {
   if (!Array.isArray(body.messages) || !body.messages.length || body.messages.length > 1024) fail('INVALID_REQUEST', 'Expected 1..1024 messages.');
   if (body.n !== undefined && body.n !== 1) fail('UNSUPPORTED_REQUEST', 'Only n=1 is supported.');
   if (body.stream !== undefined && typeof body.stream !== 'boolean') fail('INVALID_REQUEST', 'stream must be boolean.');
+  if (body.reasoning_effort !== undefined && (typeof body.reasoning_effort !== 'string' || !/^[a-z]{1,16}$/.test(body.reasoning_effort))) fail('INVALID_REQUEST', 'reasoning_effort must name a supported level.');
   if (body.response_format && !['text', 'json_object', 'json_schema'].includes(body.response_format.type)) fail('UNSUPPORTED_REQUEST', 'Unsupported response format.');
   for (const message of body.messages) {
     if (!message || !['system', 'developer', 'user', 'assistant', 'tool'].includes(message.role)) fail('INVALID_REQUEST', 'Invalid message role.');

@@ -7,6 +7,8 @@ import { BridgeError } from './profiles.mjs';
 import { ProviderPool } from './provider-pool.mjs';
 import { ModelRelay } from './provider-relay.mjs';
 import { validateChat, completion } from './provider-protocol.mjs';
+import { validateRouteReasoning } from './model-options.mjs';
+import { normalizeClaudeExecution } from './claude-permissions.mjs';
 export const providerState = path.join(bridgeRoot, '.bridge', 'provider');
 export async function localToken() {
   await mkdir(providerState, { recursive: true, mode: 0o700 });
@@ -28,6 +30,7 @@ export function validateProviderConfig(config) {
       !Number.isInteger(config.requestTimeoutMs) || config.requestTimeoutMs < config.attemptTimeoutMs || config.requestTimeoutMs > 540000) fail();
   if (!config.routes || typeof config.routes !== 'object' || Array.isArray(config.routes) || Object.keys(config.routes).length > 64) fail();
   for (const [id, route] of Object.entries(config.routes)) {
+    validateRouteReasoning(route);
     if (!/^[a-z][a-z0-9._-]{0,100}$/.test(id) || typeof route.description !== 'string' || route.description.length > 500) fail();
     if (route.provider === 'cursor') { if (typeof route.model !== 'string' || !/^[a-z0-9._-]+$/.test(route.model) || route.model === 'auto') fail(); }
     else if (route.provider === 'claude') { if (typeof route.model !== 'string' || !/^[a-z0-9._-]+$/.test(route.model) || route.model === 'auto') fail(); }
@@ -38,6 +41,11 @@ export function validateProviderConfig(config) {
     // declare delegation explicitly; mode means nothing for any other provider.
     if (route.provider === 'claude' && route.mode !== 'delegate') fail();
     if (route.provider !== 'claude' && route.mode !== undefined) fail();
+    if (route.execution !== undefined) {
+      if (route.provider !== 'claude' || route.mode !== 'delegate') fail();
+      normalizeClaudeExecution(route.execution, { cwd: bridgeRoot });
+    }
+    if (route.sessionContinuity !== undefined && (route.provider !== 'claude' || typeof route.sessionContinuity !== 'boolean')) fail();
     if (!Object.hasOwn(config.limits, route.pool ?? route.provider) ||
         route.pool !== undefined && (typeof route.pool !== 'string' || !/^[a-z][a-z0-9-]{0,50}$/.test(route.pool))) fail();
   }
@@ -55,6 +63,8 @@ export async function readProviderConfig(file = path.join(bridgeRoot, 'config', 
   return validateProviderConfig(JSON.parse(await readFile(file, 'utf8')));
 }
 function statusFor(code) {
+  if (/^SESSION_/.test(code)) return 409;
+  if (/^(MODEL_EFFORT_|CURSOR_EFFORT_)/.test(code)) return 400;
   if (code === 'DEPENDENCIES_NOT_READY') return 409;
   if (['RATE_LIMITED', 'QUEUE_FULL'].includes(code)) return 429;
   if (['TIMEOUT', 'REQUEST_TIMEOUT', 'CANCELLED'].includes(code)) return 504;
