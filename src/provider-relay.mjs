@@ -4,6 +4,7 @@ import path from 'node:path';
 import { bridgeRoot } from './account.mjs';
 import { runAgent } from './bridge.mjs';
 import { runClaude } from './claude.mjs';
+import { runCodex } from './codex.mjs';
 import { runCursor } from './cursor.mjs';
 import { BridgeError, hash } from './profiles.mjs';
 import { relayPrompt, correctiveRelayPrompt, parseRelay } from './provider-protocol.mjs';
@@ -22,7 +23,9 @@ export async function invokeCli(route, text, { signal, timeoutMs, directory, onP
     ? await runCursor({ ...options, model: route.model, trustWorkspace: true })
     : route.provider === 'claude'
       ? await runClaude({ ...options, model: route.model, onTextDelta: options.onPartial })
-      : await runAgent({ ...options, agent: route.agent, expectedModel: route.expectedModel, transportFile });
+      : route.provider === 'codex'
+        ? await runCodex({ ...options, model: route.model })
+        : await runAgent({ ...options, agent: route.agent, expectedModel: route.expectedModel, transportFile });
   return result;
 }
 // Only machine errors count as rate limits; user/model prose must not reduce capacity.

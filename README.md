@@ -1,12 +1,12 @@
 # Agent Bridge
 
-For the native model dropdown, use the registered **Cursor Bridge** provider. Every exposed model is an explicit route: five Cursor routes and two Claude Code routes. GLM's model-protocol relay fails its exact-dispatch audit, so GLM Flash and GLM-5.3 are not offered as bridge routes. See [native provider setup and status](docs/native-provider.md).
+For the native model dropdown, use the registered **Cursor Bridge** provider. Two routes are exposed: `gpt-6.1-sol` and `gpt-6-astra`, both served by the Codex CLI adapter (`src/codex.mjs`) with exact-dispatch audit from session rollout evidence. GLM's model-protocol relay fails its exact-dispatch audit, so GLM models are not offered. See [native provider setup and status](docs/native-provider.md).
 
 Run existing ZCode agent profiles from the official app's Dynamic Workflow command steps. Keep the official installation and Computer Use intact.
 
 Cursor Agent CLI is also available as a worker with `--provider cursor --model composer-2.5`. It uses its own Cursor account and native ask mode. See [Cursor setup and usage](docs/cursor.md); the combined saved workflow is `glm-cursor-probe`.
 
-Claude Code is available as a provider via the native CLI: routes `claude-opus-5-5` and `claude-sonnet-5-5` spawn the official `claude` binary headless (`-p --output-format stream-json`, read-only tools, no MCP) using the machine's existing OAuth login. Both routes are explicit-selection only, to protect subscription quota; the `claude` pool is capped at 4 concurrent runs and result `api_error_status: 429` triggers the shared cooldown. The runtime resolver rejects npm `.cmd` shims, which Node cannot spawn without a shell.
+Cursor Agent CLI and Claude Code CLI adapters remain available (`src/cursor.mjs`, `src/claude.mjs`); add their routes in `config/native-provider.json` when wanted. The Claude adapter spawns the official `claude` binary headless (`-p --output-format stream-json`, read-only tools, no MCP) using the machine's existing OAuth login; the `claude` pool is capped at 4 concurrent runs and result `api_error_status: 429` triggers the shared cooldown. The runtime resolver rejects npm `.cmd` shims, which Node cannot spawn without a shell.
 
 `stream: true` requests on Claude routes stream for real: the CLI runs with `--include-partial-messages` and an incremental envelope scanner forwards the relay envelope's content string token by token (`src/stream-relay.mjs`). Requests with `response_format` stay buffered — their content needs the final validation pass, and a corrective round cannot retract text already sent. Non-stream requests are byte-identical to before.
 

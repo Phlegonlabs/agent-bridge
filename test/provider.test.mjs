@@ -10,7 +10,7 @@ import { createProviderServer, readProviderConfig } from '../src/provider-server
 import { appendProvider } from '../src/provider-registration.mjs';
 const config = await readProviderConfig();
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-const body = { model: 'cursor-composer-2.5', messages: [{ role: 'user', content: 'probe' }], tools: [
+const body = { model: 'gpt-6.1-sol', messages: [{ role: 'user', content: 'probe' }], tools: [
   { type: 'function', function: { name: 'read_probe', parameters: { type: 'object', required: ['path'], properties: { path: { type: 'string' } }, additionalProperties: false } } },
 ] };
 test('native registration appends only the new provider and never replaces an existing entry', () => {
@@ -181,7 +181,7 @@ test('HTTP endpoint authenticates, rejects browser origins and returns valid SSE
     assert.equal((await fetch(base + '/v1/models')).status, 401);
     assert.equal((await fetch(base + '/v1/models', { headers: { Authorization: 'Bearer test-key', Origin: 'https://example.com' } })).status, 403);
     const models = await (await fetch(base + '/v1/models', { headers: { Authorization: 'Bearer test-key' } })).json();
-    assert.ok(models.data.some(model => model.id === 'cursor-composer-2.5'));
+    assert.ok(models.data.some(model => model.id === 'gpt-6.1-sol'));
     assert.ok(!models.data.some(model => model.id === 'workflow-auto'));
     const response = await fetch(base + '/v1/chat/completions', { method: 'POST', headers: { Authorization: 'Bearer test-key', 'x-session-id': 'native-actor-a', 'x-zcode-session-type': 'subagent' }, body: JSON.stringify({ ...body, stream: true }) });
     const text = await response.text(); assert.equal(response.status, 200); assert.match(text, /PROBE_OK/); assert.match(text, /\[DONE\]/); assert.equal(calls, 1);
