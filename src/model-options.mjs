@@ -21,10 +21,16 @@ export function validateRouteReasoning(route) {
   if (!route || typeof route !== 'object' || Array.isArray(route)) {
     throw new BridgeError('MODEL_EFFORT_CONFIG_INVALID', 'Route must be an object.');
   }
-  if (typeof route.model !== 'string' || !route.model) {
+  const metadata = route.reasoning;
+  const hasModel = typeof route.model === 'string' && Boolean(route.model);
+  const legacyAgentRoute = typeof route.agent === 'string' && Boolean(route.agent) &&
+    typeof route.expectedModel === 'string' && Boolean(route.expectedModel);
+  if (!hasModel && !legacyAgentRoute) {
     throw new BridgeError('MODEL_EFFORT_CONFIG_INVALID', 'Route model is required.');
   }
-  const metadata = route.reasoning;
+  if (!hasModel && metadata !== undefined) {
+    throw new BridgeError('MODEL_EFFORT_CONFIG_INVALID', 'Legacy agent routes cannot declare reasoning metadata.');
+  }
   if (metadata === undefined) return route;
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
     throw new BridgeError('MODEL_EFFORT_CONFIG_INVALID', 'Route reasoning must be an object.');

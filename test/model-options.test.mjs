@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
   codexModelCatalog, codexRoutes, cursorModelGroups, cursorRoutes,
-  reasoningOptionSpec, resolveModelSelection, selectCursorModel,
+  reasoningOptionSpec, resolveModelSelection, selectCursorModel, validateRouteReasoning,
 } from '../src/model-options.mjs';
 
 const codexCatalog = {
@@ -36,6 +36,10 @@ test('Codex catalog reads local cache and routes only visible native models', as
 });
 
 test('Route reasoning resolves default and exact variants without silent fallback', () => {
+  const legacy = { agent: 'implementer', expectedModel: 'gpt-legacy' };
+  assert.equal(validateRouteReasoning(legacy), legacy);
+  assert.throws(() => validateRouteReasoning({ ...legacy, reasoning: { values: ['high'], default: 'high' } }),
+    { code: 'MODEL_EFFORT_CONFIG_INVALID' });
   const exact = resolveModelSelection({ model: 'gpt-6.1-sol', reasoning: { values: ['low', 'high'], default: 'high' } });
   assert.deepEqual(exact, { model: 'gpt-6.1-sol', effort: 'high' });
   assert.deepEqual(resolveModelSelection({ model: 'gpt-6.1-sol', reasoning: { values: ['low', 'high'], default: 'high' } }, 'low'),
