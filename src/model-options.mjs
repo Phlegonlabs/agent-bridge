@@ -80,7 +80,7 @@ export function resolveModelSelection(route, requestedEffort) {
 export function reasoningOptionSpec(route) {
   const metadata = validateRouteReasoning(route).reasoning;
   if (!metadata) return { values: ['default'], map: '{}' };
-  return { values: ['default', ...metadata.values], map: '{"reasoning_effort": reasoningLevel}' };
+  return { values: ['default', ...(metadata.values ?? Object.keys(metadata.variants ?? {}))], map: '{"reasoning_effort": reasoningLevel}' };
 }
 
 export function codexHomeDirectory(codexHome = process.env.CODEX_HOME || path.join(homedir(), '.codex')) {
