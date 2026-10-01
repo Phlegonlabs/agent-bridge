@@ -8,7 +8,8 @@ const execute = promisify(execFile);
 
 export function ownedProcessTree(tree, rootPid, startedAt) {
   const root = tree.find(entry => entry.pid === rootPid);
-  if (!root || Date.parse(root.started) < startedAt - 2000) return [];
+  const rootStarted = Date.parse(root?.started);
+  if (!Number.isFinite(rootStarted) || Math.abs(rootStarted - startedAt) > 2000) return [];
   const owned = [root], seen = new Set([rootPid]);
   for (let index = 0; index < owned.length; index++) {
     const parent = owned[index];

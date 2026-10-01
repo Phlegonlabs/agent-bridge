@@ -16,3 +16,8 @@ test('cleanup refuses an older root and excludes unrelated process trees', () =>
   const root = process(100, 1, 0), child = process(101, 100, 1), unrelated = process(200, 1, 2);
   assert.deepEqual(ownedProcessTree([child, unrelated, root], 100, startedAt), [root, child]);
 });
+
+test('cleanup refuses a reused root PID and missing creation time', () => {
+  assert.deepEqual(ownedProcessTree([process(100, 1, 30)], 100, startedAt), []);
+  assert.deepEqual(ownedProcessTree([{ pid: 100, parent: 1 }], 100, startedAt), []);
+});
