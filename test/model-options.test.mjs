@@ -56,7 +56,7 @@ test('Route reasoning resolves default and exact variants without silent fallbac
 test('Reasoning option metadata uses the proven CEL body patch', () => {
   assert.deepEqual(reasoningOptionSpec({ model: 'composer' }), { values: ['default'], map: '{}' });
   assert.deepEqual(reasoningOptionSpec({ model: 'gpt-6.1-sol', reasoning: { values: ['low', 'high'], default: 'high' } }),
-    { values: ['low', 'high'], map: '{"reasoning_effort": reasoningLevel}' });
+    { values: ['default', 'low', 'high'], map: '{"reasoning_effort": reasoningLevel}' });
 });
 
 test('Cursor families preserve fast models and map actual catalog variants', () => {
@@ -90,4 +90,7 @@ test('Cursor families preserve fast models and map actual catalog variants', () 
   });
   assert.throws(() => selectCursorModel(models, 'composer-2.5', 'high'), { code: 'CURSOR_EFFORT_UNAVAILABLE' });
   assert.equal(selectCursorModel(models, 'grok-4.7-fast', 'high').model, 'grok-4.7-high-fast');
+  assert.ok(!JSON.stringify(routes).includes('"null":'));
+  assert.throws(() => cursorRoutes([...models, { id: 'grok-4.7', label: 'Grok 4.7' }]),
+    { code: 'CURSOR_MODEL_CATALOG_INVALID' });
 });

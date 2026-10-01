@@ -80,7 +80,7 @@ export function resolveModelSelection(route, requestedEffort) {
 export function reasoningOptionSpec(route) {
   const metadata = validateRouteReasoning(route).reasoning;
   if (!metadata) return { values: ['default'], map: '{}' };
-  return { values: metadata.values, map: '{"reasoning_effort": reasoningLevel}' };
+  return { values: ['default', ...metadata.values], map: '{"reasoning_effort": reasoningLevel}' };
 }
 
 export function codexHomeDirectory(codexHome = process.env.CODEX_HOME || path.join(homedir(), '.codex')) {
@@ -211,6 +211,9 @@ export function cursorRoutes(models, { defaultEffort = 'high' } = {}) {
     const efforts = members.map(row => row.effort).filter(Boolean)
       .sort((left, right) => (order.get(left) ?? 99) - (order.get(right) ?? 99));
     if (efforts.length) {
+      if (members.length !== efforts.length) {
+        throw new BridgeError('CURSOR_MODEL_CATALOG_INVALID', 'A Cursor family cannot mix a bare model with effort variants.');
+      }
       const selectedDefault = efforts.includes(defaultEffort) ? defaultEffort : efforts.at(-1);
       routes[routeId] = {
         provider: 'cursor',
@@ -219,7 +222,8 @@ export function cursorRoutes(models, { defaultEffort = 'high' } = {}) {
         reasoning: {
           values: efforts,
           default: selectedDefault,
-          variants: Object.fromEntries(members.map(row => [row.effort, row.model])),
+          variants: Object.fromEntries(efforts.map(effort => [effort,
+            members.find(row => row.effort === effort).model])),
         },
       };
     } else {
