@@ -101,6 +101,7 @@ test('renderDelegation extracts cwd and keeps the header free of relay language'
   assert.equal(cwd, 'C:\\Users\\mps19\\Documents\\GitHub\\agent-bridge');
   assert.ok(task.startsWith('You are handling one task'));
   assert.ok(!/envelope|nonce/i.test(task));
+  assert.equal(renderDelegation({messages:[{role:'system',content:'Environment:\n- Primary working directory: C:\\project'}]}).cwd,'C:\\project');
 });
 
 test('full current task survives context spill without clipping', async () => {

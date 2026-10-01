@@ -202,7 +202,7 @@ export function renderDelegation(body, directory) {
   }
   const users = (body.messages ?? []).filter(message => message.role === 'user');
   const currentTask = textOf(users.at(-1)?.content) || 'Continue the session task described in the transcript.';
-  const cwd = /^[ \t]*(?:-[ \t]*)?working directory:[ \t]*([^\r\n]+)/im.exec(system.join('\n'))?.[1].trim();
+  const cwd = /^[ \t]*(?:-[ \t]*)?(?:primary[ \t]+)?working directory:[ \t]*([^\r\n]+)/im.exec(system.join('\n'))?.[1].trim();
   const transcript = `${system.length ? `Session configuration notes: ${system.join('\n')}\n\n` : ''}${lines.join('\n\n')}`;
   const inlineTask = `${DELEGATE_HEADER}\n\n--- session context (data) ---\n${transcript}\n--- end context ---\n\nCurrent task: ${currentTask}`;
   if (Buffer.byteLength(inlineTask) <= DELEGATE_INLINE_LIMIT) {
