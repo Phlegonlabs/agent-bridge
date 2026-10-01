@@ -7,8 +7,10 @@ export function reportedModelMatches(model, reported) {
     (reported.startsWith(model) && /^\[[^\]]+\]$/.test(reported.slice(model.length))));
 }
 
-export function createClaudeAudit(model, { expectedSessionId, effort = null, toolNames = ['Read', 'Glob', 'Grep'] } = {}) {
+export function createClaudeAudit(model, { expectedSessionId, effort = null, mode = 'read-only',
+  toolNames = ['Read', 'Glob', 'Grep'] } = {}) {
   let init, result, errorCode, finalResponse, reportedEffort, eventCount = 0;
+  let permissionDenials = [];
   const configuredTools = new Set(toolNames);
   const toolsUsed = new Set();
   let toolUseCount = 0;
@@ -20,6 +22,10 @@ export function createClaudeAudit(model, { expectedSessionId, effort = null, too
     catch { if (init) reject('CLAUDE_INVALID_EVENT'); return; }
     if (!event || typeof event !== 'object' || Array.isArray(event)) reject('CLAUDE_INVALID_EVENT');
     eventCount++;
+    if (Array.isArray(event.permission_denials) && event.permission_denials.length) {
+      permissionDenials = [...permissionDenials, ...event.permission_denials];
+      if (mode !== 'workspace-write') reject('CLAUDE_PERMISSION_DENIED');
+    }
     if (result) reject('CLAUDE_EVENT_AFTER_RESULT');
     if (event.type === 'system' && event.subtype === 'init') {
       if (init) reject('CLAUDE_DUPLICATE_INIT');
@@ -36,7 +42,6 @@ export function createClaudeAudit(model, { expectedSessionId, effort = null, too
     } else {
       if (!init) reject('CLAUDE_INIT_MISSING');
       if (event.session_id !== undefined && event.session_id !== init.sessionId) reject('CLAUDE_SESSION_MISMATCH');
-      if (Array.isArray(event.permission_denials) && event.permission_denials.length) reject('CLAUDE_PERMISSION_DENIED');
       if (event.type === 'assistant' && Array.isArray(event.message?.content)) {
         const parts = event.message.content;
         finalResponse = parts.length && parts.every(part => part.type === 'text' && typeof part.text === 'string')
@@ -56,7 +61,8 @@ export function createClaudeAudit(model, { expectedSessionId, effort = null, too
   function finish(execution) {
     const base = { provider: 'claude', agent: 'claude-code', expectedModel: `claude/${model}`, eventCount };
     const toolEvidence = { requestedTools: [...configuredTools].sort(),
-      toolsUsed: [...toolsUsed].sort(), toolUseCount, permissionDenied: errorCode === 'CLAUDE_PERMISSION_DENIED' };
+      toolsUsed: [...toolsUsed].sort(), toolUseCount,
+      permissionDenied: permissionDenials.length > 0, permissionDenials };
     const effortEvidence = reportedEffort === undefined
       ? { requestedEffort: effort, actualEffort: null, effortEvidence: 'not-reported-by-claude-init' }
       : { requestedEffort: effort, actualEffort: reportedEffort, effortEvidence: 'claude-system-init' };
@@ -67,7 +73,8 @@ export function createClaudeAudit(model, { expectedSessionId, effort = null, too
     if (expectedSessionId && !init) return fail('CLAUDE_SESSION_UNVERIFIED');
     if (!init || !result) return fail('CLAUDE_RESULT_UNVERIFIED');
     if (result.is_error !== false || result.api_error_status || typeof result.result !== 'string') return fail('CLAUDE_RESULT_FAILED');
-    return { ...base, ...toolEvidence, ...effortEvidence, ok: true, code: 'VERIFIED', actualModel: `claude/${model}`,
+    const completionCode = permissionDenials.length ? 'VERIFIED_WITH_PERMISSION_DENIALS' : 'VERIFIED';
+    return { ...base, ...toolEvidence, ...effortEvidence, ok: true, code: completionCode, actualModel: `claude/${model}`,
       modelEvidence: 'claude-system-init', reportedModel: init.reportedModel,
       sessionId: init.sessionId, response: result.result, ...(finalResponse !== undefined ? { finalResponse } : {}) };
   }

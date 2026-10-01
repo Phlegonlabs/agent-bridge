@@ -46,11 +46,27 @@ test('Claude rejects unauthorized tool use and error results', () => {
 });
 
 test('Claude rejects configured permission denials instead of reporting verified success', () => {
-  const denied = { ...terminal, permission_denials: ['Edit(./src/example.js)'] };
+  const denial = 'Edit(./src/example.js)';
+  const denied = { ...terminal, permission_denials: [denial] };
   const result = evaluate([init, denied]);
   assert.equal(result.ok, false);
   assert.equal(result.code, 'CLAUDE_PERMISSION_DENIED');
   assert.equal(result.permissionDenied, true);
+  assert.deepEqual(result.permissionDenials, [denial]);
+});
+
+test('Claude retains workspace-write denials as evidence on a completed terminal result', () => {
+  const denial = { tool: 'Edit', input: { file_path: './src/example.js' } };
+  const denied = { ...terminal, permission_denials: [denial] };
+  const result = evaluate([init, denied], { exitCode: 0, reason: null },
+    { expectedSessionId: 'session', mode: 'workspace-write', toolNames: ['Edit'] });
+  assert.equal(result.ok, true);
+  assert.equal(result.code, 'VERIFIED_WITH_PERMISSION_DENIALS');
+  assert.equal(result.permissionDenied, true);
+  assert.deepEqual(result.permissionDenials, [denial]);
+  assert.equal(result.response, 'DONE');
+  assert.equal(evaluate([init, denied], { exitCode: 1, reason: null },
+    { expectedSessionId: 'session', mode: 'workspace-write', toolNames: ['Edit'] }).code, 'CLAUDE_CLI_FAILED');
 });
 
 test('Claude validates requested session and effort evidence', () => {
@@ -86,6 +102,11 @@ test('Claude rejects unsafe policies, effort, and writable paths outside cwd', (
   assert.throws(() => normalizeClaudeExecution({ ...write, tools: ['Write'] }), { code: 'INVALID_TOOL_RULE' });
   assert.throws(() => normalizeClaudeExecution({ ...write, tools: ['WebFetch'] }), { code: 'UNSUPPORTED_TOOL' });
   assert.throws(() => normalizeClaudeExecution({ ...write, tools: ['Edit(../outside/**)'] }), { code: 'WRITE_SCOPE_OUTSIDE_CWD' });
+  for (const scope of ['~/**', '../outside/**', '/outside/**', 'C:\\outside/**']) {
+    assert.throws(() => normalizeClaudeExecution({ ...write, writeScope: scope }), { code: 'WRITE_SCOPE_OUTSIDE_CWD' });
+    assert.throws(() => normalizeClaudeExecution({ ...write, tools: [`Edit(${scope})`] }),
+      { code: 'WRITE_SCOPE_OUTSIDE_CWD' });
+  }
   assert.throws(() => normalizeClaudeEffort('ultra'), { code: 'INVALID_EFFORT' });
 });
 
@@ -133,6 +154,36 @@ test('runClaude validates model, task, and timeout before touching the runtime',
   await assert.rejects(runClaude({ cwd: '.', task: 'x'.repeat(32769), model }), { code: 'INVALID_TASK' });
   await assert.rejects(runClaude({ cwd: '.', task: 'x', model, timeoutMs: 50 }), { code: 'INVALID_TIMEOUT' });
   await assert.rejects(runClaude({ cwd: '.', task: 'x', model, timeoutMs: 700000 }), { code: 'INVALID_TIMEOUT' });
+});
+
+test('runClaude tracks native spawn state through onSpawn and pre-process errors', async () => {
+  const validationError = await runClaude({ cwd: '.', task: 'x', model: 'auto' }).catch(error => error);
+  assert.equal(validationError.code, 'CLAUDE_MODEL_REQUIRED');
+  assert.equal(validationError.nativeStarted, false);
+
+  const spawnCalls = [];
+  const spawnError = new Error('native launch failed');
+  await assert.rejects(runClaude({
+    cwd: process.cwd(), task: 'Inspect spawn evidence.', model,
+    onSpawn: details => spawnCalls.push(details),
+    runProcessImpl: async options => {
+      options.onSpawn({ pid: 4219, startedAt: 123, command: 'claude', cwd: process.cwd() });
+      throw spawnError;
+    },
+  }), error => {
+    assert.equal(error, spawnError);
+    assert.equal(error.nativeStarted, true);
+    return true;
+  });
+  assert.deepEqual(spawnCalls, [{ pid: 4219, startedAt: 123, command: 'claude', cwd: process.cwd() }]);
+
+  const result = await runClaude({
+    cwd: process.cwd(), task: 'Preflight fails before spawn.', model,
+    runProcessImpl: async () => ({ exitCode: null, reason: 'spawn_failed', cleanup: null }),
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.nativeStarted, false);
+  assert.equal(result.execution.nativeStarted, false);
 });
 
 test('claudeRuntime rejects npm launcher shims Node cannot spawn', async () => {

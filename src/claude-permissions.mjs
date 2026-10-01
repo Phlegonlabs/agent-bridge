@@ -40,7 +40,20 @@ function patternRoot(scope, workspace) {
   return path.resolve(workspace, prefix || '.');
 }
 
+function rejectUnsafePathScope(scope) {
+  const wildcard = scope.search(/[*?{]/);
+  const prefix = wildcard === -1 ? scope : scope.slice(0, wildcard);
+  if (prefix.includes('~') || path.isAbsolute(prefix) || /^[A-Za-z]:/.test(prefix)) {
+    throw new BridgeError('WRITE_SCOPE_OUTSIDE_CWD',
+      'Writable scopes cannot use tilde or absolute paths; use a relative path inside cwd.');
+  }
+  if (prefix.split(/[\\/]+/).includes('..')) {
+    throw new BridgeError('WRITE_SCOPE_OUTSIDE_CWD', 'Writable scopes cannot contain path traversal.');
+  }
+}
+
 function requireInsideWorkspace(scope, workspace, writeScope) {
+  rejectUnsafePathScope(scope);
   const root = patternRoot(scope, workspace);
   const relative = path.relative(workspace, root);
   if (relative.startsWith('..') || path.isAbsolute(relative)) {

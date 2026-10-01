@@ -58,8 +58,18 @@ function workerInstructions(policy) {
   ].join(' ');
 }
 
-export async function runClaude({ cwd, task, model, effort, execution, session, newSessionId: requestedNewSessionId,
-  timeoutMs = 60000, signal, claudeBin, onTextDelta, runProcessImpl = runProcess }) {
+export async function runClaude(input = {}) {
+  const nativeState = { started: false };
+  try {
+    return await startClaude(input, nativeState);
+  } catch (error) {
+    error.nativeStarted = error.nativeStarted ?? nativeState.started;
+    throw error;
+  }
+}
+
+async function startClaude({ cwd, task, model, effort, execution, session, newSessionId: requestedNewSessionId,
+  timeoutMs = 60000, signal, claudeBin, onTextDelta, onSpawn, runProcessImpl = runProcess }, nativeState) {
   if (typeof model !== 'string' || !model || model === 'auto') throw new BridgeError('CLAUDE_MODEL_REQUIRED', 'Choose an explicit Claude model id, for example claude-opus-5-5.');
   if (typeof task !== 'string' || !task.trim() || Buffer.byteLength(task) > 32768) throw new BridgeError('INVALID_TASK', 'Task must be 1..32768 bytes.');
   if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 600000) throw new BridgeError('INVALID_TIMEOUT', 'Timeout must be 100..600000 ms.');
@@ -81,7 +91,7 @@ export async function runClaude({ cwd, task, model, effort, execution, session, 
     taskSha256: hash(task), mode: policy.mode, execution: policy, requestedEffort,
     session: session ? { id: session.id, resume: session.resume } : null, timeoutMs }, null, 2), { flag: 'wx', mode: 0o600 });
   const audit = createClaudeAudit(model, { expectedSessionId: session?.id, effort: requestedEffort,
-    toolNames: policy.toolNames });
+    mode: policy.mode, toolNames: policy.toolNames });
   // Partial text is advisory: verification still comes from the full audit.
   const onLine = onTextDelta
     ? line => {
@@ -97,6 +107,13 @@ export async function runClaude({ cwd, task, model, effort, execution, session, 
     : line => audit.ingest(line);
   const remainingMs = deadline - Date.now();
   if (remainingMs < 100) throw new BridgeError('TIMEOUT', 'Claude preflight exhausted the run deadline.');
+  if (onSpawn !== undefined && typeof onSpawn !== 'function') {
+    throw new BridgeError('INVALID_ON_SPAWN', 'onSpawn must be a function.');
+  }
+  const notifySpawn = details => {
+    nativeState.started = true;
+    onSpawn?.(details);
+  };
   const processResult = await runProcessImpl({ command: runtime.command, cwd: workspace, env: runtime.env,
     args: [...runtime.prefix, '-p', '--output-format', 'stream-json', '--verbose',
       '--safe-mode', '--strict-mcp-config', '--mcp-config', '{"mcpServers":{}}',
@@ -106,10 +123,13 @@ export async function runClaude({ cwd, task, model, effort, execution, session, 
       ...(requestedEffort ? ['--effort', requestedEffort] : []),
       ...sessionArgs,
       ...(onTextDelta ? ['--include-partial-messages'] : []), '--', task],
-    timeoutMs: remainingMs, signal, stdoutPath: path.join(logs, 'events.jsonl'), stderrPath: path.join(logs, 'stderr.log'), onLine });
+    timeoutMs: remainingMs, signal, stdoutPath: path.join(logs, 'events.jsonl'), stderrPath: path.join(logs, 'stderr.log'),
+    onLine, onSpawn: notifySpawn });
+  processResult.nativeStarted = processResult.nativeStarted ?? nativeState.started;
+  if (processResult.reason === 'spawn_failed' && processResult.pid === undefined) processResult.nativeStarted = false;
   const report = { schema: 'agent-bridge/result/1', runId, ...audit.finish(processResult), mode: policy.mode,
     toolPolicy: policy, requestedSessionId: session?.id ?? null, sessionResume: session?.resume ?? false,
-    execution: processResult, logs };
+    nativeStarted: processResult.nativeStarted, execution: processResult, logs };
   await writeFile(path.join(logs, 'result.json'), JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
   return report;
 }
