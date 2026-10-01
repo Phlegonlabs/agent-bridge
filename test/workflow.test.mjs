@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readPresets, selectPreset, validatePreset, executeJobs, workflowOutput } from '../src/workflow.mjs';
+import { readPresets, selectPreset, validatePreset, executeJobs, executeRoute, workflowOutput } from '../src/workflow.mjs';
 import { BridgeError } from '../src/profiles.mjs';
 
 const config = await readPresets();
@@ -18,6 +18,14 @@ test('saved defaults and per-run overrides do not mutate configuration', () => {
   const selected = selectPreset(config, { parallelLimit: 2, fallback: 'configured' });
   assert.equal(selected.preset.parallelLimit, 2); assert.equal(selected.preset.fallback.enabled, true);
   assert.equal(fresh().parallelLimit, 14); assert.equal(fresh().fallback.enabled, false);
+});
+test('claude workers validate routes and dispatch through the delegation adapter', async () => {
+  const preset = fresh();
+  assert.equal(preset.routes['claude-opus'].model, 'claude-opus-5-5');
+  assert.equal(preset.workers['claude'].route, 'claude-opus');
+  assert.throws(() => validatePreset({ ...preset, routes: { ...preset.routes, broken: { provider: 'claude', model: 'auto' } } }), /Claude route/);
+  // 'auto' reaches runClaude's own preflight, proving the dispatch path without spawning the CLI.
+  await assert.rejects(executeRoute({ provider: 'claude', model: 'auto' }, { cwd: '.', task: 'x' }), { code: 'CLAUDE_MODEL_REQUIRED' });
 });
 test('queue bounds actual execution and preserves task routing and result order', async () => {
   const preset = fresh(); preset.parallelLimit = 2;

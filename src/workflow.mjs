@@ -5,6 +5,7 @@ import path from 'node:path';
 import { bridgeRoot } from './account.mjs';
 import { BridgeError, hash } from './profiles.mjs';
 import { runAgent } from './bridge.mjs';
+import { runClaude } from './claude.mjs';
 import { runCursor } from './cursor.mjs';
 
 export const presetPath = path.join(bridgeRoot, 'config', 'workflow-presets.json');
@@ -42,7 +43,10 @@ export function validatePreset(preset) {
     } else if (route?.provider === 'cursor') {
       object(route, ['provider', 'model'], 'Cursor route');
       if (typeof route.model !== 'string' || !/^[a-zA-Z0-9._-]{1,128}$/.test(route.model) || route.model === 'auto') invalid('Cursor route requires an explicit model.');
-    } else invalid('Route provider must be zcode or cursor.');
+    } else if (route?.provider === 'claude') {
+      object(route, ['provider', 'model'], 'Claude route');
+      if (typeof route.model !== 'string' || !/^[a-zA-Z0-9._-]{1,128}$/.test(route.model) || route.model === 'auto') invalid('Claude route requires an explicit model.');
+    } else invalid('Route provider must be zcode, cursor or claude.');
   }
   for (const worker of Object.values(preset.workers)) {
     object(worker, ['description', 'route', 'fallbacks'], 'worker');
@@ -99,7 +103,9 @@ function canFallback(result, policy) {
 export async function executeRoute(route, options) {
   return route.provider === 'cursor'
     ? runCursor({ ...options, model: route.model })
-    : runAgent({ ...options, agent: route.agent, expectedModel: route.expectedModel });
+    : route.provider === 'claude'
+      ? runClaude({ ...options, model: route.model })
+      : runAgent({ ...options, agent: route.agent, expectedModel: route.expectedModel });
 }
 
 // A slot stays occupied through fallback and process cleanup. Limits are per batch.

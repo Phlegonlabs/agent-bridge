@@ -13,11 +13,15 @@ This is a saved workflow entry, not a new item in ZCode's model dropdown. The cu
 | `explorer` | Cursor CLI ask mode | Composer 2.5 Fast |
 | `reviewer` | Cursor CLI ask mode | Grok 4.7 High |
 | `cursor` | Cursor CLI ask mode | Composer 2.5 |
+| `claude` | Claude Code CLI, single-task delegation | Claude Opus 5.5 |
+| `claude-sonnet` | Claude Code CLI, single-task delegation | Claude Sonnet 5.5 |
+
+Claude workers receive one self-contained task per job and run through the native Claude Code CLI with the usual exact-dispatch audit. They are delegates, not relay models — Claude must not be exposed as a provider route (see [native provider](native-provider.md)).
 
 Every route is verified from the model name Cursor reports at runtime. Cursor's catalog label and that runtime name can differ, so verification requires the catalog label's tokens plus any tier keyword spelled out in the route id. Cursor adding a token (`Grok 4.7  High` reported as `Grok 4.7 256K High`) passes; a missing family or tier token still fails. See [native provider](native-provider.md) for the exact rule.
 
 - Parallel limit: **14 active jobs per batch**, not 14 jobs created automatically. The same worker can serve multiple independent jobs.
-- Attempt deadline: 120 seconds. Batch deadline: 300 seconds, followed by owned-process cleanup. Queued jobs share this batch deadline.
+- Attempt deadline: 420 seconds. Batch deadline: 540 seconds, followed by owned-process cleanup. Queued jobs share this batch deadline.
 - Automatic fallback: **off**, with empty candidate lists.
 - Workers remain read-only through native plan/ask behavior. These are not operating-system sandboxes, and this extension does not enable implementation workers.
 

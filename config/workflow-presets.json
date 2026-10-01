@@ -26,6 +26,14 @@
         "cursor-composer": {
           "provider": "cursor",
           "model": "composer-2.5"
+        },
+        "claude-opus": {
+          "provider": "claude",
+          "model": "claude-opus-5-5"
+        },
+        "claude-sonnet": {
+          "provider": "claude",
+          "model": "claude-sonnet-5-5"
         }
       },
       "workers": {
@@ -42,6 +50,16 @@
         "cursor": {
           "description": "Use Composer 2.5 for code analysis and independent review in native ask mode.",
           "route": "cursor-composer",
+          "fallbacks": []
+        },
+        "claude": {
+          "description": "Delegate a self-contained heavy review or reasoning task to Claude Opus 5.5.",
+          "route": "claude-opus",
+          "fallbacks": []
+        },
+        "claude-sonnet": {
+          "description": "Delegate a self-contained drafting or lookup task to Claude Sonnet 5.5.",
+          "route": "claude-sonnet",
           "fallbacks": []
         }
       }
