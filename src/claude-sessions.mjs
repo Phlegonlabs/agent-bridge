@@ -1,4 +1,4 @@
-import { mkdir, readFile, realpath, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, realpath, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { BridgeError, hash } from './profiles.mjs';
@@ -105,7 +105,7 @@ export class ClaudeSessions {
     if (receipt?.schema !== SESSION_SCHEMA || receipt.keyHash !== keyHash ||
       !UUID_PATTERN.test(receipt.nativeSessionId ?? '') ||
       typeof receipt.cwd !== 'string' || typeof receipt.policyHash !== 'string' ||
-      !['running', 'uncertain', 'completed'].includes(receipt.status) ||
+      !['running', 'uncertain', 'completed', 'resumable'].includes(receipt.status) ||
       !Array.isArray(receipt.turns) || receipt.turns.length > TURN_LIMIT ||
       receipt.turns.some(turn => typeof turn?.fingerprintHash !== 'string' ||
         (turn.status !== 'completed' && turn.status !== 'uncertain'))) {
@@ -116,16 +116,16 @@ export class ClaudeSessions {
 
   #requireAvailable(receipt, request) {
     if (!receipt) return;
-    if (receipt.status !== 'completed') {
-      throw new BridgeError('SESSION_RECOVERY_REQUIRED',
-        `Claude session is ${receipt.status}; inspect the native session before reuse.`);
-    }
     if (receipt.cwd !== request.cwd) {
       throw new BridgeError('SESSION_CWD_CHANGED', 'The native session belongs to a different workspace.');
     }
     if (receipt.policyHash !== request.policyHash) {
       throw new BridgeError('SESSION_POLICY_CHANGED', 'The native session belongs to a different execution policy.');
     }
+    if (receipt.status === 'completed' || receipt.status === 'resumable') return;
+    if (this.#findTurn(receipt, request.fingerprintHash)) return;
+    throw new BridgeError('SESSION_RECOVERY_REQUIRED',
+      `Claude session is ${receipt.status}; inspect the native session before reuse.`);
   }
 
   #findTurn(receipt, fingerprintHash) {
@@ -142,26 +142,85 @@ export class ClaudeSessions {
     }
   }
 
-  async run(request, callback) {
-    if (typeof callback !== 'function') throw new BridgeError('INVALID_SESSION_CALLBACK', 'Claude callback must be a function.');
-    if (!request || typeof request !== 'object' || Array.isArray(request)) {
-      throw new BridgeError('INVALID_SESSION_INPUT', 'Claude session request must be an object.');
-    }
-    const zcodeSessionId = boundedToken(request.sessionId, 'sessionId', 128);
-    const sessionType = boundedToken(request.sessionType, 'sessionType', 64);
-    const fingerprint = boundedToken(request.fingerprint, 'fingerprint', 32768);
-    const keyHash = jsonHash([zcodeSessionId, sessionType]);
-    const fingerprintHash = hash(fingerprint);
-
+  async #withKeyLock(keyHash, operation) {
     if (this.#locks.has(keyHash)) throw new BridgeError('SESSION_BUSY', 'The Claude session already has an active turn.');
     this.#locks.set(keyHash, true);
     try {
+      return await operation();
+    } finally {
+      this.#locks.delete(keyHash);
+    }
+  }
+
+  async #identity(request) {
+    if (!request || typeof request !== 'object' || Array.isArray(request)) {
+      throw new BridgeError('INVALID_SESSION_INPUT', 'Claude session request must be an object.');
+    }
+    const sessionId = boundedToken(request.sessionId, 'sessionId', 128);
+    const sessionType = boundedToken(request.sessionType, 'sessionType', 64);
+    return { sessionId, sessionType, keyHash: jsonHash([sessionId, sessionType]) };
+  }
+
+  async inspect(request) {
+    const identity = await this.#identity(request);
+    return this.#withKeyLock(identity.keyHash, async () => {
+      await this.#ready;
+      const receipt = await this.#load(identity.keyHash);
+      if (!receipt) throw new BridgeError('SESSION_NOT_FOUND', 'No Claude session receipt exists for this key.');
+      return receipt;
+    });
+  }
+
+  async recover(request) {
+    const identity = await this.#identity(request);
+    if (!UUID_PATTERN.test(request.expectedNativeSessionId ?? '')) {
+      throw new BridgeError('INVALID_SESSION_INPUT', 'expectedNativeSessionId must be a UUID.');
+    }
+    if (request.inspected !== true) {
+      throw new BridgeError('INSPECTION_REQUIRED', 'Confirm that the native Claude session was inspected.');
+    }
+    return this.#withKeyLock(identity.keyHash, async () => {
+      await this.#ready;
+      const file = this.#statePath(identity.keyHash);
+      const receipt = await this.#load(identity.keyHash);
+      if (!receipt) throw new BridgeError('SESSION_NOT_FOUND', 'No Claude session receipt exists for this key.');
+      if (receipt.nativeSessionId !== request.expectedNativeSessionId) {
+        throw new BridgeError('SESSION_MISMATCH', 'The expected native session does not match the receipt.');
+      }
+      if (receipt.status === 'running' && request.runtimeOffline !== true) {
+        throw new BridgeError('RUNTIME_ACTIVE',
+          'Verify the service is offline on port 32147 and pass runtimeOffline before recovering a running receipt.');
+      }
+      if (receipt.status === 'completed') {
+        throw new BridgeError('SESSION_ALREADY_COMPLETED', 'The receipt is already completed.');
+      }
+      if (receipt.status === 'resumable') {
+        throw new BridgeError('SESSION_ALREADY_RESUMABLE', 'The receipt is already resumable.');
+      }
+      const backup = `${file}.${new Date().toISOString().replace(/[:.]/g, '-')}.backup`;
+      await copyFile(file, backup);
+      await this.#writeAtomic(file, {
+        ...receipt,
+        status: 'resumable',
+        recoveredAt: new Date().toISOString(),
+      });
+      return { status: 'resumable', backup };
+    });
+  }
+
+  async run(request, callback) {
+    if (typeof callback !== 'function') throw new BridgeError('INVALID_SESSION_CALLBACK', 'Claude callback must be a function.');
+    const { keyHash } = await this.#identity(request);
+    const fingerprint = boundedToken(request.fingerprint, 'fingerprint', 32768);
+    const fingerprintHash = hash(fingerprint);
+
+    return this.#withKeyLock(keyHash, async () => {
       await this.#ready;
       request.signal?.throwIfAborted();
       const cwd = await canonicalDirectory(request.cwd);
       const policyHash = jsonHash(request.policy ?? {});
       const receipt = await this.#load(keyHash);
-      this.#requireAvailable(receipt, { cwd, policyHash });
+      this.#requireAvailable(receipt, { cwd, policyHash, fingerprintHash });
       const previous = this.#findTurn(receipt, fingerprintHash);
       if (previous) return previous.result;
 
@@ -183,17 +242,23 @@ export class ClaudeSessions {
       };
       await this.#writeAtomic(this.#statePath(keyHash), running);
 
-      let callbackStarted = false;
+      let executionStarted = false;
       try {
         request.signal?.throwIfAborted();
-        callbackStarted = true;
-        const result = await callback({ session: { id: nativeSessionId, resume } });
+        const result = await callback({ session: { id: nativeSessionId, resume },
+          onNativeStarted: () => { executionStarted = true; } });
         this.#validateResult(result);
-        request.signal?.throwIfAborted();
+        const spawnEvidence = executionStarted ||
+          Number.isInteger(result.execution?.pid) && result.execution.pid > 0;
         if (result.ok && result.sessionId !== nativeSessionId) {
           throw new BridgeError('SESSION_MISMATCH', 'The Claude worker did not use the assigned native session.');
         }
         if (!result.ok) {
+          if (!spawnEvidence) {
+            if (receipt) await this.#writeAtomic(this.#statePath(keyHash), receipt);
+            else await unlink(this.#statePath(keyHash)).catch(() => {});
+            return result;
+          }
           await this.#writeAtomic(this.#statePath(keyHash), {
             ...running,
             status: 'uncertain',
@@ -212,7 +277,7 @@ export class ClaudeSessions {
         return result;
       } catch (error) {
         const code = error instanceof BridgeError ? error.code : 'CALLBACK_FAILED';
-        if (!callbackStarted) {
+        if (!executionStarted) {
           if (receipt) await this.#writeAtomic(this.#statePath(keyHash), receipt);
           else await unlink(this.#statePath(keyHash)).catch(() => {});
         } else {
@@ -224,8 +289,6 @@ export class ClaudeSessions {
         }
         throw error;
       }
-    } finally {
-      this.#locks.delete(keyHash);
+    });
     }
   }
-}
