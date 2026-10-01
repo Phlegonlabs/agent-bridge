@@ -114,6 +114,16 @@ test('full current task survives context spill without clipping', async () => {
   assert.ok((await readFile(rendered.contextFile,'utf8')).includes('END_REQUIREMENT'));
  } finally {await rm(state,{recursive:true,force:true});}
 });
+
+test('medium-size current tasks spill before reaching Windows argument limits', async () => {
+ const state=await mkdtemp(path.join(tmpdir(),'bridge-medium-task-'));
+ try {
+  const instruction='quoted spec: '+ '"x"'.repeat(6800)+' END';
+  const rendered=await renderDelegation({messages:[{role:'user',content:instruction}]},state);
+  assert.ok(Buffer.byteLength(rendered.task)<12000);assert.ok(rendered.contextFile);
+  assert.ok((await readFile(rendered.contextFile,'utf8')).includes(instruction));
+ } finally {await rm(state,{recursive:true,force:true});}
+});
 test('fingerprints exclude stream delivery and normalize key order',()=>{
  const first={model:'claude-opus-5-5',messages:[{role:'user',content:'do work'}],stream:true};
  const second={stream:false,messages:[{content:'do work',role:'user'}],model:'claude-opus-5-5'};
@@ -141,4 +151,22 @@ test('writable delegate resumes, replays duplicates and forwards effort and tool
   await assert.rejects(relay.complete({...first,tool_choice:{type:'function',function:{name:'forced'}}},opts),{code:'UNSUPPORTED_REQUEST'});
   await assert.rejects(relay.complete({...first,response_format:{type:'json_object'}},opts),{code:'UNSUPPORTED_REQUEST'});
  } finally {await rm(state,{recursive:true,force:true});pool.close();}
+});
+
+test('queued cancellation restores the Claude receipt and invalid cwd is explicit', async () => {
+ const state=await mkdtemp(path.join(tmpdir(),'bridge-queue-delegate-'));
+ const pool=new ProviderPool({limits:{claude:1}}), release=await pool.acquire('claude');
+ const route={...delegateRoute,execution:{mode:'workspace-write',writeScope:'./**',tools:['Read','Edit(./**)']}};
+ const relay=new ModelRelay({routes:{'claude-opus-5-5':route},attemptTimeoutMs:1000,fallback:{enabled:false,on:[],routes:{}}},pool,
+  async(r,task,opts)=>({...stubResponse,response:'finished',sessionId:opts.session.id}),state);
+ const request={model:'claude-opus-5-5',messages:[{role:'system',content:'working directory: '+state},{role:'user',content:'finish'}]};
+ const controller=new AbortController(), opts={transport:{sessionId:'queue-session',sessionType:'chat'}};
+ try {
+  const pending=relay.complete(request,{...opts,signal:controller.signal});
+  const cancellation=setTimeout(()=>controller.abort(),40);
+  await assert.rejects(pending);clearTimeout(cancellation);release();
+  assert.equal((await relay.complete(request,{...opts,signal:new AbortController().signal})).message.content,'finished');
+  await assert.rejects(relay.complete({...request,messages:[{role:'system',content:'working directory: '+path.join(state,'missing')},{role:'user',content:'finish'}]},
+   {...opts,signal:new AbortController().signal}),{code:'INVALID_CWD'});
+ } finally {release();pool.close();await rm(state,{recursive:true,force:true});}
 });
