@@ -28,10 +28,17 @@ test('workflow CLI rejects invalid routing and conflicting inputs before invokin
     ['workflow', '--cwd', '.', '--jobs-json', '[]', '--workers', 'cursor'],
     ['run', '--preset', 'cursor'],
     ['presets', '--fallback', 'off'],
+    ['run', '--provider', 'claude', '--cwd', '.', '--task-file', 'x'],
+    ['run', '--provider', 'claude', '--cwd', '.', '--task-file', 'x', '--model', 'claude-opus-5-5', '--agent', 'code_explorer'],
+    ['run', '--provider', 'claude', '--cwd', '.', '--task-file', 'x', '--model', 'claude-opus-5-5', '--trust-workspace'],
   ]) {
     const result = await cli(args);
     assert.equal(result.exitCode, 1, args.join(' '));
     assert.equal(result.value.ok, false);
     assert.match(result.value.code, /^INVALID_/);
   }
+});
+test('claude run requires an explicit model and stays a single-task delegation', async () => {
+  const help = await cli(['run', '--help']);
+  assert.match(JSON.stringify(help.value), /--provider claude --model/);
 });

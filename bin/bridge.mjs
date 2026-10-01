@@ -5,6 +5,7 @@ import { listProfiles, publicProfile, BridgeError } from '../src/profiles.mjs';
 import { installedRuntime, runAgent } from '../src/bridge.mjs';
 import { loginAccount } from '../src/account.mjs';
 import { cursorRuntime, cursorDoctor, cursorModels, cursorLogin, runCursor } from '../src/cursor.mjs';
+import { runClaude } from '../src/claude.mjs';
 import { readJsonFile, readPresets, selectPreset, runWorkflow, workflowOutput } from '../src/workflow.mjs';
 
 const controller = new AbortController();
@@ -22,8 +23,9 @@ try {
     'jobs-json': { type: 'string' },
   } });
   const command = positionals[0];
-  if (!['zcode', 'cursor'].includes(values.provider)) throw new BridgeError('INVALID_PROVIDER', 'Provider must be zcode or cursor.');
+  if (!['zcode', 'cursor', 'claude'].includes(values.provider)) throw new BridgeError('INVALID_PROVIDER', 'Provider must be zcode, cursor or claude.');
   if (values.provider === 'cursor' && (values.agent || values.cli || values['expected-model'])) throw new BridgeError('INVALID_ARGUMENT', 'Cursor uses --model and --cursor-dir, not ZCode agent or CLI options.');
+  if (values.provider === 'claude' && (values.agent || values.cli || values['expected-model'] || values['cursor-dir'] || values['trust-workspace'])) throw new BridgeError('INVALID_ARGUMENT', 'Claude uses --model only, not ZCode agent or Cursor options.');
   if (values.provider === 'zcode' && (values.model || values['cursor-dir'] || values['trust-workspace'] && command !== 'workflow')) throw new BridgeError('INVALID_ARGUMENT', 'Cursor options require --provider cursor.');
   const workflowOnly = ['config', 'preset', 'parallel-limit', 'fallback', 'task', 'workers', 'jobs-file', 'jobs-json'];
   if (!['workflow', 'presets'].includes(command) && workflowOnly.some(key => values[key] !== undefined)) throw new BridgeError('INVALID_ARGUMENT', 'Workflow options require workflow or presets.');
@@ -32,7 +34,8 @@ try {
     emit({ commands: ['profiles', 'doctor', 'login', 'models', 'run', 'presets', 'workflow'], run: '--agent NAME --cwd DIRECTORY --task-file FILE [--expected-model PROVIDER/MODEL] [--timeout-ms 60000]',
       workflow: '--cwd DIRECTORY (--task TEXT | --task-file FILE | --jobs-file FILE | --jobs-json JSON) [--preset NAME] [--workers explorer,reviewer,cursor] [--parallel-limit 14] [--fallback off|configured] [--trust-workspace]',
       cursor: '--provider cursor --model MODEL_ID --cwd DIRECTORY --task-file FILE [--trust-workspace] [--cursor-dir PACKAGE_DIRECTORY]',
-      note: 'ZCode expected-model asserts profile identity. Cursor model selects a native model; Cursor runs in ask mode.' });
+      claude: '--provider claude --model claude-opus-5-5 --cwd DIRECTORY --task-file FILE [--timeout-ms 120000]',
+      note: 'ZCode expected-model asserts profile identity. Cursor model selects a native model; Cursor runs in ask mode. Claude delegates one self-contained task to the native Claude Code CLI.' });
   } else if (positionals.length !== 1) throw new BridgeError('INVALID_ARGUMENT', 'Unexpected positional arguments.');
   else if (command === 'presets') {
     if (workflowOnly.filter(key => key !== 'config').some(key => values[key] !== undefined) || values.cwd || values['task-file'] || values['trust-workspace']) throw new BridgeError('INVALID_ARGUMENT', 'presets only accepts --config.');
@@ -85,14 +88,16 @@ try {
       : await loginAccount(await installedRuntime(values.cli), options);
     emit(report); if (!report.ok) process.exitCode = 1;
   } else if (command === 'run') {
-    if (!values.cwd || !values['task-file'] || values.provider === 'zcode' && !values.agent || values.provider === 'cursor' && !values.model) throw new BridgeError('INVALID_ARGUMENT', 'run requires --cwd, --task-file, and a ZCode --agent or Cursor --model.');
+    if (!values.cwd || !values['task-file'] || values.provider === 'zcode' && !values.agent || values.provider !== 'zcode' && !values.model) throw new BridgeError('INVALID_ARGUMENT', 'run requires --cwd, --task-file, and a ZCode --agent or a Cursor/Claude --model.');
     const taskPath = values['task-file'];
     if ((await stat(taskPath)).size > 32768) throw new BridgeError('INVALID_TASK', 'Task file exceeds 32768 bytes.');
     const task = await readFile(taskPath, 'utf8');
     const timeoutMs = values['timeout-ms'] === undefined ? 60000 : Number(values['timeout-ms']);
     const report = values.provider === 'cursor'
       ? await runCursor({ cwd: values.cwd, task, model: values.model, cursorDir: values['cursor-dir'], timeoutMs, signal: controller.signal, trustWorkspace: values['trust-workspace'] })
-      : await runAgent({ agent: values.agent, cwd: values.cwd, task,
+      : values.provider === 'claude'
+        ? await runClaude({ cwd: values.cwd, task, model: values.model, timeoutMs, signal: controller.signal })
+        : await runAgent({ agent: values.agent, cwd: values.cwd, task,
       expectedModel: values['expected-model'], cliPath: values.cli,
       timeoutMs, signal: controller.signal });
     emit(report); if (!report.ok) process.exitCode = 1;
