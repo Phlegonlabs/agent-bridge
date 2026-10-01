@@ -1,14 +1,14 @@
 # Agent Bridge
 
-For the native model dropdown, two ZCode providers share this bridge: **Cursor Bridge** (`workflow-bridge`) exposing `gpt-6.1-sol` and `gpt-6-astra` via the Codex CLI adapter (`src/codex.mjs`, rollout exact-dispatch audit), and **Claude Bridge** (`claude-bridge`) exposing `claude-opus-5-5` as a delegate route — selecting it turns each turn into one self-contained Claude Code task. GLM's model-protocol relay fails its exact-dispatch audit, so GLM models are not offered. See [native provider setup and status](docs/native-provider.md).
+Two ZCode providers share the local bridge. **Agent Bridge** (`workflow-bridge`) exposes eight Codex models and eleven Cursor model families. Its reasoning selector forwards the chosen strength to Codex or selects Cursor's exact native variant. **Claude Bridge** (`claude-bridge`) exposes Opus and Sonnet as task delegates, with scoped file edits, named shell commands and native session continuity. See [native provider setup](docs/native-provider.md).
 
 Run existing ZCode agent profiles from the official app's Dynamic Workflow command steps. Keep the official installation and Computer Use intact.
 
 Cursor Agent CLI is also available as a worker with `--provider cursor --model composer-2.5`. It uses its own Cursor account and native ask mode. See [Cursor setup and usage](docs/cursor.md); the combined saved workflow is `glm-cursor-probe`.
 
-Cursor Agent CLI and Claude Code CLI adapters remain available (`src/cursor.mjs`, `src/claude.mjs`). Cursor routes can be re-added in `config/native-provider.json`. Claude works only as a delegate, never a relay: the envelope/transport framing is refused by Anthropic (`stop_reason: "refusal"`, ToS on duplicating model outputs), while task delegation runs clean. Three ways to delegate Claude, all keeping the exact-dispatch audit (`claude-system-init`): `node bin/bridge.mjs run --provider claude --model claude-opus-5-5 --cwd DIRECTORY --task-file FILE`, the `claude` / `claude-sonnet` workers in preset workflows, and the delegate-mode routes below. The runtime resolver rejects npm `.cmd` shims, which Node cannot spawn without a shell.
+Cursor Agent CLI and Claude Code CLI adapters also work through `bin/bridge.mjs` and saved workflows. Claude runs the task directly with its own CLI tools. Writable execution and session continuity are configured on the native provider routes; standalone CLI workers remain read-only by default. The Claude runtime resolver requires the native binary because Node cannot spawn npm `.cmd` shims without a shell.
 
-`stream: true` requests on Claude routes stream for real: the CLI runs with `--include-partial-messages` and an incremental envelope scanner forwards the relay envelope's content string token by token (`src/stream-relay.mjs`). Requests with `response_format` stay buffered — their content needs the final validation pass, and a corrective round cannot retract text already sent. Non-stream requests are byte-identical to before.
+Claude delegate routes stream the CLI's text deltas and verify the final run. They reject forced outer tool calls and structured response formats. A writable task is never rerun merely to correct its answer format.
 
 The earlier CLI-worker workflow `model-bridge` remains available. It supports routing within its saved worker/model allowlist, a parallel limit of 14, and configurable fallback that is off by default. See [saved execution settings](docs/workflow-presets.md).
 
@@ -75,6 +75,6 @@ The saved workflow compiled and completed through the official bundled CLI's nat
 - Keep each command's workflow timeout longer than the bridge timeout plus process cleanup time. The example uses 60 seconds plus a 30-second allowance.
 - Cancellation and deadlines terminate the owned process tree and check the observed Windows process identities. A cleanup result of `unconfirmed` requires inspection; it is never reported as successful work. Detached daemons are unsupported.
 - Project agents that shadow a selected user agent are rejected. Unsupported frontmatter fields also fail explicitly.
-- Changing the profile during a run invalidates that run's result. Mid-run model switching and writable workers are not implemented.
+- Changing a ZCode profile during a run invalidates its result. Claude delegate routes support scoped writes and model changes between completed turns; changes during a running turn are rejected.
 
 Run `npm test` for the offline suite. Live GLM, Cursor and native Dynamic Workflow evidence is tracked in [the compatibility notes](docs/compatibility.md).
