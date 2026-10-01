@@ -31,7 +31,7 @@ export function reportedModelMatches(model, reported) {
   return required.every(token => reportedTokens.has(token));
 }
 
-export function createCursorAudit(model) {
+export function createCursorAudit(model, requestedEffort = null) {
   let init, result, errorCode, finalResponse, eventCount = 0;
   const startedWriteCalls = new Set();
   const reject = code => { errorCode ??= code; throw new BridgeError(code, code); };
@@ -82,7 +82,9 @@ export function createCursorAudit(model) {
     }
   }
   function finish(execution) {
-    const base = { provider: 'cursor', agent: 'cursor', expectedModel: `cursor/${model.id}`, eventCount };
+    const base = { provider: 'cursor', agent: 'cursor', expectedModel: `cursor/${model.id}`, eventCount,
+      requestedEffort: requestedEffort ?? null, actualEffort: model.effort ?? null,
+      effortEvidence: 'cursor-native-model-selection' };
     const fail = code => ({ ...base, ok: false, code });
     if (errorCode) return fail(errorCode);
     if (startedWriteCalls.size) return fail('CURSOR_UNEXPECTED_WRITE_TOOL');

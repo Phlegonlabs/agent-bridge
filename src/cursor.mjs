@@ -5,6 +5,7 @@ import { bridgeRoot } from './account.mjs';
 import { BridgeError, hash } from './profiles.mjs';
 import { runProcess } from './process.mjs';
 import { createCursorAudit, parseCursorModels } from './cursor-audit.mjs';
+import { normalizeEffortValue, selectCursorModel } from './model-options.mjs';
 
 export const cursorBuild = '2026.09.18-9a7762b';
 export async function cursorRuntime(directory = process.env.CURSOR_BRIDGE_DIR) {
@@ -55,28 +56,31 @@ export async function cursorLogin(runtime, { signal, onAuthorizeUrl = () => {} }
   return cursorDoctor(runtime, { signal });
 }
 
-export async function runCursor({ cwd, task, model, cursorDir, timeoutMs = 60000, signal, trustWorkspace = false }) {
+export async function runCursor({ cwd, task, model, effort, cursorDir, timeoutMs = 60000, signal, trustWorkspace = false }) {
   if (typeof model !== 'string' || !model || model === 'auto') throw new BridgeError('CURSOR_MODEL_REQUIRED', 'Choose an explicit Cursor model from models --provider cursor; Auto cannot prove a fixed model.');
   if (typeof task !== 'string' || !task.trim() || Buffer.byteLength(task) > 32768) throw new BridgeError('INVALID_TASK', 'Task must be 1..32768 bytes.');
   if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 600000) throw new BridgeError('INVALID_TIMEOUT', 'Timeout must be 100..600000 ms.');
+  let requestedEffort;
+  try { requestedEffort = normalizeEffortValue(effort); }
+  catch { throw new BridgeError('CURSOR_EFFORT_INVALID', 'Cursor effort must be a supported lowercase level or default.'); }
   const deadline = Date.now() + timeoutMs;
   const workspace = await realpath(cwd);
   if (!(await stat(workspace)).isDirectory()) throw new BridgeError('INVALID_CWD', 'Workspace must be a directory.');
   const runtime = await cursorRuntime(cursorDir);
   const catalog = await cursorModels(runtime, { signal, timeoutMs: Math.min(20000, timeoutMs) });
-  const selected = catalog.models.find(item => item.id === model);
-  if (!selected) throw new BridgeError('CURSOR_MODEL_UNAVAILABLE', 'The requested model is not in the current Cursor account catalog.');
+  const selected = selectCursorModel(catalog.models, model, requestedEffort);
   const runId = randomUUID();
   const logs = path.join(bridgeRoot, '.bridge', 'runs', runId);
   await mkdir(logs, { recursive: true, mode: 0o700 });
   await writeFile(path.join(logs, 'request.json'), JSON.stringify({ runId, provider: 'cursor', model,
+    requestedEffort, nativeModel: selected.model, nativeEffort: selected.effort,
     catalogLabel: selected.label, taskSha256: hash(task), mode: 'ask', trustWorkspace, timeoutMs }, null, 2), { flag: 'wx', mode: 0o600 });
-  const audit = createCursorAudit(selected);
+  const audit = createCursorAudit({ ...selected, id: selected.model }, requestedEffort);
   const remainingMs = deadline - Date.now();
   if (remainingMs < 100) throw new BridgeError('TIMEOUT', 'Cursor preflight exhausted the run deadline.');
   const execution = await runProcess({ command: runtime.command, cwd: workspace, env: runtime.env,
     args: [...runtime.prefix, '--print', '--output-format', 'stream-json', '--mode', 'ask',
-      '--model', model, '--workspace', workspace, ...(trustWorkspace ? ['--trust'] : []), '--', task],
+      '--model', selected.model, '--workspace', workspace, ...(trustWorkspace ? ['--trust'] : []), '--', task],
     timeoutMs: remainingMs, signal, stdoutPath: path.join(logs, 'events.jsonl'), stderrPath: path.join(logs, 'stderr.log'), onLine: audit.ingest });
   const report = { schema: 'agent-bridge/result/1', runId, ...audit.finish(execution), mode: 'ask', execution, logs };
   await writeFile(path.join(logs, 'result.json'), JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });

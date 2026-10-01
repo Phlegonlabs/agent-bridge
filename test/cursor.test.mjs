@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { link, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { createCursorAudit, parseCursorModels } from '../src/cursor-audit.mjs';
 import { runCursor } from '../src/cursor.mjs';
 
@@ -10,6 +13,34 @@ function evaluate(events, execution = { exitCode: 0, reason: null }) {
   const audit = createCursorAudit(selected);
   for (const event of events) { try { audit.ingest(typeof event === 'string' ? event : JSON.stringify(event)); } catch {} }
   return audit.finish(execution);
+}
+
+async function cursorFixture() {
+  const root = await mkdtemp(path.join(tmpdir(), 'agent-bridge-cursor-'));
+  const runtime = path.join(root, process.platform === 'win32' ? 'node.exe' : 'node');
+  try { await link(process.execPath, runtime); } catch { await writeFile(runtime, await readFile(process.execPath)); }
+  await writeFile(path.join(root, 'package.json'), JSON.stringify({ name: '@anysphere/agent-cli-runtime' }));
+  await writeFile(path.join(root, 'index.js'), `
+const args = process.argv.slice(2);
+const models = ['composer-2.5', 'grok-4.7-low', 'grok-4.7-high',
+  'grok-4.7-low-fast', 'grok-4.7-high-fast'];
+const labelFor = model => {
+  if (model === 'composer-2.5') return 'Composer 2.5';
+  const fast = model.endsWith('-fast');
+  const effort = model.replace(/-fast$/, '').split('-').at(-1);
+  return 'Grok 4.7 ' + effort.charAt(0).toUpperCase() + effort.slice(1) + (fast ? ' Fast' : '');
+};
+if (args[0] === 'models') {
+  process.stdout.write('Available models\\nauto - Auto (default)\\n');
+  for (const id of models) process.stdout.write(id + ' - ' + labelFor(id) + '\\n');
+} else {
+  const model = args[args.indexOf('--model') + 1];
+  const label = labelFor(model);
+  process.stdout.write(JSON.stringify({ type: 'system', subtype: 'init', session_id: 'session', model: label }) + '\\n');
+  process.stdout.write(JSON.stringify({ type: 'result', subtype: 'success', session_id: 'session', is_error: false, result: 'RUN:' + model }) + '\\n');
+}
+`);
+  return { root, runtime };
 }
 
 test('Cursor catalog maps official IDs to labels without selecting Auto', () => {
@@ -99,4 +130,37 @@ test('Cursor allows read events and rejects executed write tools', () => {
 test('Cursor requires an explicit model before launching anything', async () => {
   await assert.rejects(runCursor({ cwd: '.', task: 'test', model: 'auto' }), { code: 'CURSOR_MODEL_REQUIRED' });
   await assert.rejects(runCursor({ cwd: '.', task: 'test' }), { code: 'CURSOR_MODEL_REQUIRED' });
+});
+
+test('Cursor maps one actual native variant and rejects unavailable exact strength', async () => {
+  const { root } = await cursorFixture();
+  const workspace = root;
+  const result = await runCursor({ cwd: workspace, task: 'test', model: 'grok-4.7', effort: 'high',
+    cursorDir: root, timeoutMs: 1000 });
+  assert.equal(result.ok, true);
+  assert.equal(result.actualModel, 'cursor/grok-4.7-high');
+  assert.equal(result.requestedEffort, 'high');
+  assert.equal(result.actualEffort, 'high');
+  assert.equal(result.response, 'RUN:grok-4.7-high');
+  const request = JSON.parse(await readFile(path.join(result.logs, 'request.json'), 'utf8'));
+  assert.equal(request.nativeModel, 'grok-4.7-high');
+  assert.equal(request.nativeEffort, 'high');
+
+  await assert.rejects(runCursor({ cwd: workspace, task: 'test', model: 'grok-4.7-high', effort: 'low',
+    cursorDir: root, timeoutMs: 1000 }), { code: 'CURSOR_EFFORT_UNAVAILABLE' });
+  await assert.rejects(runCursor({ cwd: workspace, task: 'test', model: 'composer-2.5', effort: 'high',
+    cursorDir: root, timeoutMs: 1000 }), { code: 'CURSOR_EFFORT_UNAVAILABLE' });
+  await assert.rejects(runCursor({ cwd: workspace, task: 'test', model: 'grok-4.7', effort: 'FAST',
+    cursorDir: root, timeoutMs: 1000 }), { code: 'CURSOR_EFFORT_INVALID' });
+});
+
+test('Cursor keeps a fast family separate and preserves observed default strength', async () => {
+  const { root } = await cursorFixture();
+  const fast = await runCursor({ cwd: root, task: 'test', model: 'grok-4.7-fast', effort: 'high',
+    cursorDir: root, timeoutMs: 1000 });
+  assert.equal(fast.response, 'RUN:grok-4.7-high-fast');
+  const exact = await runCursor({ cwd: root, task: 'test', model: 'grok-4.7-high',
+    cursorDir: root, timeoutMs: 1000 });
+  assert.equal(exact.requestedEffort, null);
+  assert.equal(exact.actualEffort, 'high');
 });
