@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { BridgeError, hash } from './profiles.mjs';
+import { reasoningOptionSpec } from './model-options.mjs';
 import { providerState } from './provider-server.mjs';
 export const nativeProviderId = 'workflow-bridge';
 export function appendProvider(existing, config, token) {
@@ -83,8 +84,7 @@ export function reconcileProviders(existing, config, token) {
         inputFormat: { supportsText: true, supportsImage: false, supportsVideo: false, supportsAudio: false, supportsPdf: false },
         outputFormat: { supportsText: true }, supportsToolCall: route.mode !== 'delegate', supportsJsonSchemaOutput: false,
         supportsNativeWebSearch: false, supportsMidConversationSystem: true },
-      optionSpecs: { reasoningLevel: { values: route.reasoning?.values ?? (Object.keys(route.reasoning?.variants ?? {}).length ? Object.keys(route.reasoning.variants) : ['default']),
-        map: '{"reasoning_effort": reasoningLevel}' }, maxOutputTokens: { max: 8192, map: '{}' } } }
+      optionSpecs: { reasoningLevel: reasoningOptionSpec(route), maxOutputTokens: { max: 8192, map: '{}' } } }
   })));
   output.config.modelConfigRules.providerModelRules = [...unrelated, ...generated];
   return output;

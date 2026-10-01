@@ -4,7 +4,7 @@ import { reconcileProviders } from '../src/provider-registration.mjs';
 const original = () => ({ schemaVersion: 1, config: { providerOrder: ['other','workflow-bridge'],
  providerConfigRules: { providerRules: [{providerId:'other', config:{access:{apiKey:'keep'}}}, {providerId:'workflow-bridge',providerName:'old'}] },
  modelConfigRules: { providerModelRules:[{providerId:'other',modelId:'old',config:{enabled:false}},{providerId:'workflow-bridge',modelId:'stale'}], manualProviderModelRules:[{providerId:'other',modelId:'manual'}] } } });
-const config = {port:32147,routes:{'gpt-6.1-sol':{provider:'codex',reasoning:{values:['low','high'],default:'high'}},'cursor-grok':{provider:'cursor',reasoning:{variants:{low:'grok-low',high:'grok-high'}}},'claude-sonnet-5-5':{provider:'claude',mode:'delegate',reasoning:{values:['low','high'],default:'high'}}}};
+const config = {port:32147,routes:{'gpt-6.1-sol':{provider:'codex',model:'gpt-6.1-sol',reasoning:{values:['low','high'],default:'high'}},'cursor-grok':{provider:'cursor',model:'grok-low',reasoning:{variants:{low:'grok-low',high:'grok-high'}}},'claude-sonnet-5-5':{provider:'claude',model:'claude-sonnet-5-5',mode:'delegate',reasoning:{values:['low','high'],default:'high'}}}};
 test('update separates providers and preserves unrelated config and manual overrides',()=>{
  const prior=original(), next=reconcileProviders(prior,config,'local-test');
  assert.deepEqual(next.config.providerConfigRules.providerRules[0],prior.config.providerConfigRules.providerRules[0]);
