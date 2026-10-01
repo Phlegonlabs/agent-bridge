@@ -57,3 +57,12 @@ test('a failed executable returns a bounded failure', async () => {
   const result = await runProcess(await options('', { command: 'nonexistent-zcode-bridge-test-executable' }));
   assert.equal(result.reason, 'spawn_failed');
 });
+
+test('spawn hook marks only real starts and large stdin avoids command-line limits', async () => {
+  let starts=0; const inputText='字"'.repeat(20000), lines=[];
+  const result=await runProcess(await options('let n=0;process.stdin.on("data",b=>n+=b.length);process.stdin.on("end",()=>console.log(n));',
+    {stdinText:inputText,onSpawn:()=>starts++,onLine:line=>lines.push(line)}));
+  assert.equal(result.exitCode,0);assert.equal(starts,1);assert.equal(Number(lines[0]),Buffer.byteLength(inputText));
+  await runProcess(await options('',{command:'nonexistent-zcode-bridge-test-executable',onSpawn:()=>starts++}));
+  assert.equal(starts,1);
+});
