@@ -34,20 +34,20 @@ function parseToolRule(rule) {
   return { base, argument };
 }
 
-function patternRoot(scope) {
+function patternRoot(scope, workspace) {
   const wildcard = scope.search(/[*?{]/);
   const prefix = wildcard === -1 ? scope : scope.slice(0, wildcard);
-  return path.resolve(prefix || '.');
+  return path.resolve(workspace, prefix || '.');
 }
 
 function requireInsideWorkspace(scope, workspace, writeScope) {
-  const root = patternRoot(scope);
+  const root = patternRoot(scope, workspace);
   const relative = path.relative(workspace, root);
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
     throw new BridgeError('WRITE_SCOPE_OUTSIDE_CWD', 'Writable paths must stay inside the actual working directory.');
   }
   if (writeScope) {
-    const writeRoot = patternRoot(writeScope);
+    const writeRoot = patternRoot(writeScope, workspace);
     const relativeToScope = path.relative(writeRoot, root);
     if (relativeToScope.startsWith('..') || path.isAbsolute(relativeToScope)) {
       throw new BridgeError('INVALID_TOOL_RULE', 'Writable tool scopes must stay inside writeScope.');
@@ -73,6 +73,9 @@ export function normalizeClaudeExecution(execution, { cwd = process.cwd() } = {}
     ? undefined
     : input.writeScope;
 
+  if (requestedTools !== undefined && !Array.isArray(requestedTools)) {
+    throw new BridgeError('INVALID_TOOL_RULE', 'Tools must be an array of rule strings.');
+  }
   if (readMode && requestedTools !== undefined && (!Array.isArray(requestedTools) || !requestedTools.length)) {
     throw new BridgeError('INVALID_TOOL_RULE', 'Read-only tools must be a non-empty array when supplied.');
   }
