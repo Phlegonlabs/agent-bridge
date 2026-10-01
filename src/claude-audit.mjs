@@ -1,7 +1,5 @@
 import { BridgeError } from './profiles.mjs';
 
-const RELAY_TOOLS = new Set(['Read', 'Glob', 'Grep']);
-
 // Claude reports the requested id, optionally with a bracketed variant suffix
 // such as claude-opus-5-5[1m]; anything else is a silent model fallback.
 export function reportedModelMatches(model, reported) {
@@ -9,8 +7,11 @@ export function reportedModelMatches(model, reported) {
     (reported.startsWith(model) && /^\[[^\]]+\]$/.test(reported.slice(model.length))));
 }
 
-export function createClaudeAudit(model) {
-  let init, result, errorCode, finalResponse, eventCount = 0;
+export function createClaudeAudit(model, { expectedSessionId, effort = null, toolNames = ['Read', 'Glob', 'Grep'] } = {}) {
+  let init, result, errorCode, finalResponse, reportedEffort, eventCount = 0;
+  const configuredTools = new Set(toolNames);
+  const toolsUsed = new Set();
+  let toolUseCount = 0;
   const reject = code => { errorCode ??= code; throw new BridgeError(code, code); };
   function ingest(line) {
     if (!line.trim()) return;
@@ -23,13 +24,19 @@ export function createClaudeAudit(model) {
     if (event.type === 'system' && event.subtype === 'init') {
       if (init) reject('CLAUDE_DUPLICATE_INIT');
       if (typeof event.session_id !== 'string' || !event.session_id) reject('CLAUDE_SESSION_UNVERIFIED');
+      if (expectedSessionId && event.session_id !== expectedSessionId) reject('CLAUDE_SESSION_MISMATCH');
       if (!reportedModelMatches(model, event.model)) reject('CLAUDE_MODEL_MISMATCH');
+      if (event.effort !== undefined) {
+        if (effort && event.effort !== effort) reject('CLAUDE_EFFORT_MISMATCH');
+        reportedEffort = event.effort;
+      }
       init = { sessionId: event.session_id, reportedModel: event.model };
     } else if (event.type === 'error') {
       reject('CLAUDE_REPORTED_ERROR');
     } else {
       if (!init) reject('CLAUDE_INIT_MISSING');
       if (event.session_id !== undefined && event.session_id !== init.sessionId) reject('CLAUDE_SESSION_MISMATCH');
+      if (Array.isArray(event.permission_denials) && event.permission_denials.length) reject('CLAUDE_PERMISSION_DENIED');
       if (event.type === 'assistant' && Array.isArray(event.message?.content)) {
         const parts = event.message.content;
         finalResponse = parts.length && parts.every(part => part.type === 'text' && typeof part.text === 'string')
@@ -37,7 +44,10 @@ export function createClaudeAudit(model) {
         // The CLI's tool allowlist already blocks writes; this re-checks what
         // actually ran so a flag regression cannot pass unnoticed.
         for (const part of parts) {
-          if (part?.type === 'tool_use' && !RELAY_TOOLS.has(part.name)) reject('CLAUDE_UNEXPECTED_WRITE_TOOL');
+          if (part?.type !== 'tool_use') continue;
+          toolUseCount++;
+          toolsUsed.add(part.name);
+          if (!configuredTools.has(part.name)) reject('CLAUDE_UNAUTHORIZED_TOOL');
         }
       }
       if (event.type === 'result') result = event;
@@ -45,13 +55,19 @@ export function createClaudeAudit(model) {
   }
   function finish(execution) {
     const base = { provider: 'claude', agent: 'claude-code', expectedModel: `claude/${model}`, eventCount };
-    const fail = code => ({ ...base, ok: false, code });
+    const toolEvidence = { requestedTools: [...configuredTools].sort(),
+      toolsUsed: [...toolsUsed].sort(), toolUseCount, permissionDenied: errorCode === 'CLAUDE_PERMISSION_DENIED' };
+    const effortEvidence = reportedEffort === undefined
+      ? { requestedEffort: effort, actualEffort: null, effortEvidence: 'not-reported-by-claude-init' }
+      : { requestedEffort: effort, actualEffort: reportedEffort, effortEvidence: 'claude-system-init' };
+    const fail = code => ({ ...base, ...toolEvidence, ...effortEvidence, ok: false, code });
     if (errorCode) return fail(errorCode);
     if (execution.reason) return fail(execution.reason.toUpperCase());
     if (execution.exitCode !== 0) return fail('CLAUDE_CLI_FAILED');
+    if (expectedSessionId && !init) return fail('CLAUDE_SESSION_UNVERIFIED');
     if (!init || !result) return fail('CLAUDE_RESULT_UNVERIFIED');
     if (result.is_error !== false || result.api_error_status || typeof result.result !== 'string') return fail('CLAUDE_RESULT_FAILED');
-    return { ...base, ok: true, code: 'VERIFIED', actualModel: `claude/${model}`,
+    return { ...base, ...toolEvidence, ...effortEvidence, ok: true, code: 'VERIFIED', actualModel: `claude/${model}`,
       modelEvidence: 'claude-system-init', reportedModel: init.reportedModel,
       sessionId: init.sessionId, response: result.result, ...(finalResponse !== undefined ? { finalResponse } : {}) };
   }
