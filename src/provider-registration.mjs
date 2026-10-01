@@ -82,7 +82,9 @@ export function reconcileProviders(existing, config, token) {
     providerId: group.id, modelId, config: { enabled: true,
       properties: { contextWindow: route.contextWindow ?? 131072, requiresMfjsToolSchema: false,
         inputFormat: { supportsText: true, supportsImage: false, supportsVideo: false, supportsAudio: false, supportsPdf: false },
-        outputFormat: { supportsText: true }, supportsToolCall: route.mode !== 'delegate', supportsJsonSchemaOutput: false,
+        // ZCode requires this flag to submit a coding turn with host tool declarations.
+        // Delegates still execute inside Claude and return their own text result.
+        outputFormat: { supportsText: true }, supportsToolCall: true, supportsJsonSchemaOutput: false,
         supportsNativeWebSearch: false, supportsMidConversationSystem: true },
       optionSpecs: { reasoningLevel: reasoningOptionSpec(route), maxOutputTokens: { max: 8192, map: '{}' } } }
   })));

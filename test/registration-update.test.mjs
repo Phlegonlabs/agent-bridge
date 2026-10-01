@@ -15,7 +15,7 @@ test('update separates providers and preserves unrelated config and manual overr
  assert.equal(prior.config.providerConfigRules.providerRules.length,2);
  const rule=next.config.modelConfigRules.providerModelRules.find(r=>r.modelId==='gpt-6.1-sol');
  assert.deepEqual(rule.config.optionSpecs.reasoningLevel,{values:['default','low','high'],map:'{"reasoning_effort": reasoningLevel}'});
- assert.equal(next.config.modelConfigRules.providerModelRules.find(r=>r.providerId==='claude-bridge').config.properties.supportsToolCall,false);
+ assert.equal(next.config.modelConfigRules.providerModelRules.find(r=>r.providerId==='claude-bridge').config.properties.supportsToolCall,true);
  assert.ok(!next.config.modelConfigRules.providerModelRules.some(r=>r.modelId==='stale'));
  assert.deepEqual(reconcileProviders(next,config,'local-test'),next);
 });
