@@ -30,6 +30,18 @@
       "model": "gpt-6-astra",
       "expectedModel": "codex/gpt-6-astra",
       "description": "GPT-6 Astra via the Codex CLI using the machine's existing login."
+    },
+    "claude-opus-5-5": {
+      "provider": "claude",
+      "model": "claude-opus-5-5",
+      "mode": "delegate",
+      "description": "Claude Opus 5.5 as a delegated worker: each turn becomes one self-contained Claude Code task with its own tools."
+    },
+    "claude-sonnet-5-5": {
+      "provider": "claude",
+      "model": "claude-sonnet-5-5",
+      "mode": "delegate",
+      "description": "Claude Sonnet 5.5 as a delegated worker: each turn becomes one self-contained Claude Code task with its own tools."
     }
   }
 }

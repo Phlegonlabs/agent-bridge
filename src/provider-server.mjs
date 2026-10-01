@@ -34,6 +34,10 @@ export function validateProviderConfig(config) {
     else if (route.provider === 'codex') { if (typeof route.model !== 'string' || !/^[a-z0-9._-]+$/.test(route.model) || route.model === 'auto') fail(); }
     else if (route.provider === 'zcode') { if (typeof route.agent !== 'string' || typeof route.expectedModel !== 'string' || !route.expectedModel.includes('/')) fail(); }
     else fail();
+    // Claude-as-relay is refused by Anthropic's terms, so a claude route must
+    // declare delegation explicitly; mode means nothing for any other provider.
+    if (route.provider === 'claude' && route.mode !== 'delegate') fail();
+    if (route.provider !== 'claude' && route.mode !== undefined) fail();
     if (!Object.hasOwn(config.limits, route.pool ?? route.provider) ||
         route.pool !== undefined && (typeof route.pool !== 'string' || !/^[a-z][a-z0-9-]{0,50}$/.test(route.pool))) fail();
   }
