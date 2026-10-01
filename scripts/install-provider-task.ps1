@@ -2,14 +2,16 @@ param()
 $ErrorActionPreference = 'Stop'
 $BridgeDirectory = Split-Path -Parent $PSScriptRoot
 $TaskName = 'ZCodeWorkflowBridgeProvider'
-$StartScript = Join-Path $BridgeDirectory 'scripts\start-provider.ps1'
+$HiddenWrapper = Join-Path $BridgeDirectory 'scripts\start-provider-hidden.vbs'
 
 $Existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 if ($Existing) {
     Write-Output "Scheduled task '$TaskName' already exists; it will be replaced."
 }
 
-$Action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$StartScript`""
+# wscript wrapper instead of powershell.exe directly: a directly launched
+# powershell flashes a console window at startup even with -WindowStyle Hidden.
+$Action = New-ScheduledTaskAction -Execute 'wscript.exe' -Argument "//E:VBScript //B //NoLogo `"$HiddenWrapper`""
 $LogonTrigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $WatchdogTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
