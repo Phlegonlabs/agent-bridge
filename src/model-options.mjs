@@ -147,6 +147,16 @@ export function codexRoutes(catalog) {
   return routes;
 }
 
+export function selectCodexModel(models, model, effort) {
+  const requested = normalizeEffortValue(effort);
+  const selected = models.find(entry => entry.id === model);
+  if (!selected) throw new BridgeError('CODEX_MODEL_UNAVAILABLE', 'The requested model is not in the Codex local model cache.');
+  if (requested !== null && !selected.efforts.includes(requested)) {
+    throw new BridgeError('CODEX_EFFORT_UNAVAILABLE', 'The selected Codex model does not support the requested effort.');
+  }
+  return selected;
+}
+
 function cursorIdentity(id) {
   const unnamespaced = String(id).replace(/^cursor-/, '');
   const fast = unnamespaced.endsWith('-fast');

@@ -4,7 +4,7 @@ import { BridgeError } from './profiles.mjs';
 // the session rollout's turn_context records, so runCodex supplies them at finish.
 const ALLOWED_ITEM_TYPES = new Set(['agent_message', 'reasoning', 'todo_list']);
 
-export function createCodexAudit(model) {
+export function createCodexAudit(model, requestedEffort = null) {
   let threadId, turnCompleted, finalResponse, errorCode, eventCount = 0;
   const reject = code => { errorCode ??= code; throw new BridgeError(code, code); };
   function ingest(line) {
@@ -37,7 +37,10 @@ export function createCodexAudit(model) {
     }
   }
   function finish(execution, rollout = {}) {
-    const base = { provider: 'codex', agent: 'codex-cli', expectedModel: `codex/${model}`, eventCount };
+    const actualEffort = typeof rollout.reportedEffort === 'string' ? rollout.reportedEffort : null;
+    const effortEvidence = actualEffort === null ? 'not-reported-by-codex-rollout' : 'codex-rollout-turn-context';
+    const base = { provider: 'codex', agent: 'codex-cli', expectedModel: `codex/${model}`, eventCount,
+      requestedEffort: requestedEffort ?? null, actualEffort, effortEvidence };
     const fail = code => ({ ...base, ok: false, code });
     if (errorCode) return fail(errorCode);
     if (execution.reason) return fail(execution.reason.toUpperCase());
@@ -46,6 +49,10 @@ export function createCodexAudit(model) {
     if (typeof finalResponse !== 'string') return fail('CODEX_RESULT_UNVERIFIED');
     if (rollout.sessionConfirmed !== true) return fail('CODEX_SESSION_UNVERIFIED');
     if (rollout.reportedModel !== model) return fail('CODEX_MODEL_MISMATCH');
+    if (requestedEffort !== null) {
+      if (actualEffort === null) return fail('CODEX_EFFORT_UNVERIFIED');
+      if (actualEffort !== requestedEffort) return fail('CODEX_EFFORT_MISMATCH');
+    }
     return { ...base, ok: true, code: 'VERIFIED', actualModel: `codex/${model}`,
       modelEvidence: 'codex-rollout-turn-context', reportedModel: rollout.reportedModel,
       sessionId: threadId, response: finalResponse, finalResponse };

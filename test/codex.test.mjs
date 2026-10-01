@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { link, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { createCodexAudit } from '../src/codex-audit.mjs';
 import { codexRuntime, runCodex } from '../src/codex.mjs';
 
@@ -8,10 +11,43 @@ const thread = { type: 'thread.started', thread_id: 'thread' };
 const message = { type: 'item.completed', item: { id: 'item_0', type: 'agent_message', text: 'DONE' } };
 const turn = { type: 'turn.completed', usage: { input_tokens: 1, output_tokens: 1 } };
 const verified = { sessionConfirmed: true, reportedModel: model };
-function evaluate(events, execution = { exitCode: 0, reason: null }, rollout = verified) {
-  const audit = createCodexAudit(model);
+function evaluate(events, execution = { exitCode: 0, reason: null }, rollout = verified, requestedEffort = null) {
+  const audit = createCodexAudit(model, requestedEffort);
   for (const event of events) { try { audit.ingest(typeof event === 'string' ? event : JSON.stringify(event)); } catch {} }
   return audit.finish(execution, rollout);
+}
+
+async function codexFixture() {
+  const home = await mkdtemp(path.join(tmpdir(), 'agent-bridge-codex-home-'));
+  const workspace = await mkdtemp(path.join(tmpdir(), 'agent-bridge-codex-run-'));
+  await writeFile(path.join(home, 'models_cache.json'), JSON.stringify({
+    models: [{ slug: model, display_name: 'GPT Test', visibility: 'list',
+      default_reasoning_level: 'medium',
+      description: 'Test model.',
+      supported_reasoning_levels: [{ effort: 'low' }, { effort: 'medium' }, { effort: 'high' }] }],
+  }));
+  const runtime = path.join(home, process.platform === 'win32' ? 'codex.exe' : 'codex');
+  try { await link(process.execPath, runtime); } catch { await writeFile(runtime, await readFile(process.execPath)); }
+  // The fake native runtime is Node itself. It finds this extensionless `exec`
+  // script in the run workspace and reports the exact argument vector it received.
+  await writeFile(path.join(workspace, 'exec'), `
+const args = process.argv.slice(2);
+const event = value => process.stdout.write(JSON.stringify(value) + '\\n');
+event({ type: 'thread.started', thread_id: 'fake-thread' });
+event({ type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify(args) } });
+event({ type: 'turn.completed', usage: {} });
+`);
+  return { home, workspace, runtime };
+}
+
+async function withCodexHome(home, operation) {
+  const previous = process.env.CODEX_HOME;
+  process.env.CODEX_HOME = home;
+  try { return await operation(); }
+  finally {
+    if (previous === undefined) delete process.env.CODEX_HOME;
+    else process.env.CODEX_HOME = previous;
+  }
 }
 
 test('Codex requires thread/turn evidence, rollout confirmation and a final message', () => {
@@ -25,6 +61,16 @@ test('Codex requires thread/turn evidence, rollout confirmation and a final mess
 test('Codex rejects a rollout that reports another model or cannot be found', () => {
   assert.equal(evaluate([thread, message, turn], undefined, { sessionConfirmed: true, reportedModel: 'gpt-6-astra' }).code, 'CODEX_MODEL_MISMATCH');
   assert.equal(evaluate([thread, message, turn], undefined, { sessionConfirmed: false, reportedModel: undefined }).code, 'CODEX_SESSION_UNVERIFIED');
+});
+
+test('Codex verifies requested rollout effort and preserves an observed default', () => {
+  const effort = { sessionConfirmed: true, reportedModel: model, reportedEffort: 'high' };
+  assert.equal(evaluate([thread, message, turn], undefined, effort, 'high').actualEffort, 'high');
+  assert.equal(evaluate([thread, message, turn], undefined,
+    { ...effort, reportedEffort: 'low' }, 'high').code, 'CODEX_EFFORT_MISMATCH');
+  assert.equal(evaluate([thread, message, turn], undefined,
+    { sessionConfirmed: true, reportedModel: model }, 'high').code, 'CODEX_EFFORT_UNVERIFIED');
+  assert.equal(evaluate([thread, message, turn], undefined, effort).actualEffort, 'high');
 });
 
 test('Codex rejects relay-forbidden tool work and error events', () => {
@@ -54,6 +100,31 @@ test('runCodex validates model, task, and timeout before touching the runtime', 
   await assert.rejects(runCodex({ cwd: '.', task: 'x'.repeat(32769), model }), { code: 'INVALID_TASK' });
   await assert.rejects(runCodex({ cwd: '.', task: 'x', model, timeoutMs: 50 }), { code: 'INVALID_TIMEOUT' });
   await assert.rejects(runCodex({ cwd: '.', task: 'x', model, timeoutMs: 700000 }), { code: 'INVALID_TIMEOUT' });
+});
+
+test('runCodex validates catalog effort and forwards the exact config override', async () => {
+  const { home, workspace, runtime } = await codexFixture();
+  await withCodexHome(home, async () => {
+    await assert.rejects(runCodex({ cwd: workspace, task: 'test', model, effort: 'FAST' }),
+      { code: 'CODEX_EFFORT_INVALID' });
+    await assert.rejects(runCodex({ cwd: workspace, task: 'test', model, effort: 'ultra' }),
+      { code: 'CODEX_EFFORT_UNAVAILABLE' });
+    const requested = await runCodex({ cwd: workspace, task: 'test', model, effort: 'high', timeoutMs: 1000, codexBin: runtime });
+    assert.equal(requested.code, 'CODEX_SESSION_UNVERIFIED');
+    const events = (await readFile(path.join(requested.logs, 'events.jsonl'), 'utf8')).trim()
+      .split('\n').map(line => JSON.parse(line));
+    const args = JSON.parse(events.find(event => event.type === 'item.completed').item.text);
+    const overrideAt = args.indexOf('-c');
+    assert.equal(args[overrideAt + 1], 'model_reasoning_effort="high"');
+    assert.equal(JSON.parse(await readFile(path.join(requested.logs, 'request.json'), 'utf8')).requestedEffort, 'high');
+
+    const defaulted = await runCodex({ cwd: workspace, task: 'test', model, timeoutMs: 1000, codexBin: runtime });
+    const defaultEvents = (await readFile(path.join(defaulted.logs, 'events.jsonl'), 'utf8')).trim()
+      .split('\n').map(line => JSON.parse(line));
+    const defaultArgs = JSON.parse(defaultEvents.find(event => event.type === 'item.completed').item.text);
+    assert.equal(defaultArgs.includes('model_reasoning_effort="high"'), false);
+    assert.equal(JSON.parse(await readFile(path.join(defaulted.logs, 'request.json'), 'utf8')).requestedEffort, null);
+  });
 });
 
 test('codexRuntime rejects npm launcher shims Node cannot spawn', async () => {
