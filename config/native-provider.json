@@ -82,67 +82,6 @@
         "default": "medium"
       }
     },
-    "gpt-5.6-sol": {
-      "provider": "codex",
-      "model": "gpt-5.6-sol",
-      "description": "GPT-5.6-Sol via the Codex CLI using the machine's existing login.",
-      "reasoning": {
-        "values": [
-          "low",
-          "medium",
-          "high",
-          "xhigh",
-          "max",
-          "ultra"
-        ],
-        "default": "low"
-      }
-    },
-    "gpt-5.6-terra": {
-      "provider": "codex",
-      "model": "gpt-5.6-terra",
-      "description": "GPT-5.6-Terra via the Codex CLI using the machine's existing login.",
-      "reasoning": {
-        "values": [
-          "low",
-          "medium",
-          "high",
-          "xhigh",
-          "max",
-          "ultra"
-        ],
-        "default": "medium"
-      }
-    },
-    "gpt-5.6-luna": {
-      "provider": "codex",
-      "model": "gpt-5.6-luna",
-      "description": "GPT-5.6-Luna via the Codex CLI using the machine's existing login.",
-      "reasoning": {
-        "values": [
-          "low",
-          "medium",
-          "high",
-          "xhigh",
-          "max"
-        ],
-        "default": "medium"
-      }
-    },
-    "gpt-5.5": {
-      "provider": "codex",
-      "model": "gpt-5.5",
-      "description": "GPT-5.5 via the Codex CLI using the machine's existing login.",
-      "reasoning": {
-        "values": [
-          "low",
-          "medium",
-          "high",
-          "xhigh"
-        ],
-        "default": "medium"
-      }
-    },
     "cursor-composer-2.5": {
       "provider": "cursor",
       "model": "composer-2.5",
