@@ -82,6 +82,9 @@ export class ModelRelay {
         code: result.code, actualModel: result.actualModel, logs: result.logs, execution: result.execution }), { flag: 'wx', mode: 0o600 });
       if (result.execution?.cleanup?.status === 'unconfirmed') { this.pool.close(); throw new BridgeError('CLEANUP_UNCONFIRMED', 'Inspect the recorded worker process before continuing.'); }
       if (!result.ok) {
+        if (result.permissionDenied || result.permissionDenials?.length) {
+          throw Object.assign(new BridgeError('CLAUDE_PERMISSION_DENIED', 'The failed worker also reported denied operations; fallback cannot bypass them.'), { worker: result });
+        }
         const limit = await rateLimitDetails(result);
         if (limit) {
           this.pool.limited(poolName, limit.retryAfterMs, limit.quota);

@@ -126,6 +126,16 @@ test('unconfirmed Claude cleanup and cancelled requests cannot start GPT', async
   });
 });
 
+test('a timeout with earlier permission denials cannot bypass them through GPT', async () => {
+  await fixture(async ({ relay, calls, body, options }) => {
+    const original = relay.invoke;
+    relay.invoke = async (route, prompt, settings) => ({ ...await original(route, prompt, settings),
+      permissionDenied: true, permissionDenials: [{ tool_name: 'Bash' }] });
+    await assert.rejects(relay.complete(body, options), { code: 'CLAUDE_PERMISSION_DENIED' });
+    assert.equal(calls.length, 1);
+  });
+});
+
 test('known Claude cooldown skips its queue and starts GPT immediately', async () => {
   await fixture(async ({ relay, pool, calls, body, options, state }) => {
     await writeFile(path.join(state, 'partial.txt'), 'completed Claude step');
