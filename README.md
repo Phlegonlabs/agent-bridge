@@ -8,7 +8,7 @@ Cursor Agent CLI is also available as a worker with `--provider cursor --model c
 
 Cursor Agent CLI and Claude Code CLI adapters also work through `bin/bridge.mjs` and saved workflows. Claude runs the task directly with its own CLI tools. Writable execution and session continuity are configured on the native provider routes; standalone CLI workers remain read-only by default. The Claude runtime resolver requires the native binary because Node cannot spawn npm `.cmd` shims without a shell.
 
-Claude delegate routes stream the CLI's text deltas and verify the final run. They reject forced outer tool calls and structured response formats. A writable task is never rerun merely to correct its answer format.
+Claude delegate routes verify the final run and switch to GPT-6.1-Sol `xhigh` on timeout or rate/usage limits. GPT continues through ZCode's host tools and inspects partial work first; the failed Claude turn is not replayed. Fallback-enabled turns buffer text until completion. They reject forced outer tool calls and structured response formats. A writable task is never rerun merely to correct its answer format.
 
 The earlier CLI-worker workflow `model-bridge` remains available. It supports routing within its saved worker/model allowlist, a parallel limit of 14, and configurable fallback that is off by default. See [saved execution settings](docs/workflow-presets.md).
 

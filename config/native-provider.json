@@ -9,14 +9,20 @@
     "codex": 4
   },
   "attemptTimeoutMs": 420000,
-  "requestTimeoutMs": 540000,
+  "requestTimeoutMs": 900000,
   "fallback": {
-    "enabled": false,
+    "enabled": true,
     "on": [
       "PROVIDER_UNAVAILABLE",
-      "CURSOR_MODEL_UNAVAILABLE"
+      "CURSOR_MODEL_UNAVAILABLE",
+      "TIMEOUT",
+      "RATE_LIMITED"
     ],
-    "routes": {}
+    "reasoningEffort": "xhigh",
+    "routes": {
+      "claude-opus-5-5": ["gpt-6.1-sol"],
+      "claude-sonnet-5-5": ["gpt-6.1-sol"]
+    }
   },
   "routes": {
     "gpt-6.1-sol": {

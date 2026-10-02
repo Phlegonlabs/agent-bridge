@@ -36,11 +36,15 @@ export async function isRateLimited(result) {
 }
 export async function rateLimitDetails(result) {
   if (['RATE_LIMITED', 'rate_limited', '1302', '1308'].includes(result.code)) return { retryAfterMs: 15000, quota: result.code === '1308' };
-  if (!result.logs || !['CLI_FAILED', 'AGENT_FAILED', 'CURSOR_CLI_FAILED', 'CLAUDE_CLI_FAILED', 'CLAUDE_RESULT_FAILED', 'CHILD_RESULT_UNVERIFIED'].includes(result.code)) return false;
+  if (!result.logs || !['CLI_FAILED', 'AGENT_FAILED', 'CURSOR_CLI_FAILED', 'CLAUDE_CLI_FAILED', 'CLAUDE_RESULT_FAILED', 'CLAUDE_REPORTED_ERROR', 'CLAUDE_RESULT_UNVERIFIED', 'CHILD_RESULT_UNVERIFIED'].includes(result.code)) return false;
   let text; try { text = await readFile(path.join(result.logs, 'events.jsonl'), 'utf8'); } catch { return false; }
   for (const line of text.split('\n')) {
     let event; try { event = JSON.parse(line); } catch { continue; }
     const p = event.payload;
+    if ((event.type === 'assistant' && event.error === 'rate_limit') ||
+        (event.type === 'rate_limit_event' && event.rate_limit_info?.status === 'rejected')) {
+      return { retryAfterMs: 15000, quota: true };
+    }
     if (event.type === 'result' && (event.api_error_status === 429 || event.api_error_status === '429')) {
       return { retryAfterMs: 15000, quota: false };
     }
@@ -48,7 +52,7 @@ export async function rateLimitDetails(result) {
       return { retryAfterMs: Number.isFinite(p.retryAfterMs) ? p.retryAfterMs : 15000, quota: String(p.providerErrorCode) === '1308' };
     }
     const error = p?.error ?? (event.type === 'error' ? event.error : undefined);
-    if (error && (['rate_limited', '1302', '1308'].includes(String(error.code)) || error.status === 429 || error.attribution?.statusCode === 429)) {
+    if (error && (['rate_limited', 'rate_limit_error', '1302', '1308'].includes(String(error.code)) || error.type === 'rate_limit_error' || error.status === 429 || error.attribution?.statusCode === 429)) {
       return { retryAfterMs: 15000, quota: String(error.code) === '1308' };
     }
   }
@@ -70,7 +74,7 @@ export class ModelRelay {
   async call(routeId, prompt, options) {
     const route = this.config.routes[routeId], poolName = this.poolName(route);
     const selection = resolveModelSelection(route, options.requestedEffort);
-    if (this.pool.groups[poolName].cooldownUntil > Date.now() + options.timeoutMs) throw new BridgeError('RATE_LIMITED', 'This capacity pool is cooling down until its reported reset. No model switch was performed.');
+    if (this.pool.groups[poolName].cooldownUntil > Date.now() + (options.skipCooldown ? 0 : options.timeoutMs)) throw new BridgeError('RATE_LIMITED', 'This capacity pool is cooling down until its reported reset.');
     const release = await this.pool.acquire(poolName, options.signal);
     try {
       const result = await this.invoke({ ...route, model: selection.model }, prompt, { ...options, effort: selection.effort });
@@ -82,9 +86,9 @@ export class ModelRelay {
         if (limit) {
           this.pool.limited(poolName, limit.retryAfterMs, limit.quota);
           await writeFile(this.limitFile(poolName), JSON.stringify({ until: this.pool.groups[poolName].cooldownUntil, quota: limit.quota }), { mode: 0o600 });
-          throw new BridgeError('RATE_LIMITED', 'Provider rate limited this request. Its queue is cooling down.');
+          throw Object.assign(new BridgeError('RATE_LIMITED', 'Provider rate limited this request. Its queue is cooling down.'), { worker: result });
         }
-        throw new BridgeError(result.code ?? 'RELAY_FAILED', 'The selected CLI failed. No model switch was performed.');
+        throw Object.assign(new BridgeError(result.code ?? 'RELAY_FAILED', 'The selected CLI failed.'), { worker: result });
       }
       this.pool.succeeded(poolName);
       return result;
@@ -109,7 +113,8 @@ export class ModelRelay {
       // Streaming skips response_format requests: their content still needs the
       // final validation pass, and a corrective round cannot retract sent text.
       const streamed = Boolean(onContentDelta) && !body.response_format && this.config.routes[routeId]?.provider === 'claude';
-      const attemptOptions = streamed ? { ...options, onPartial: createEnvelopeContentStream(nonce, onContentDelta).feed } : options;
+      const routeOptions = routeId === decision.route ? options : { ...options, requestedEffort: this.config.fallback.reasoningEffort ?? options.requestedEffort };
+      const attemptOptions = streamed ? { ...routeOptions, onPartial: createEnvelopeContentStream(nonce, onContentDelta).feed } : routeOptions;
       try {
         result = await this.call(routeId, relayPrompt(body, nonce), attemptOptions);
         try { message = parseRelay(result.finalResponse ?? result.response, body, nonce); }
@@ -131,7 +136,7 @@ export class ModelRelay {
       }
     }
     const evidence = { id, requestedModel: body.model, selected, requestedEffort: body.reasoning_effort,
-      effectiveEffort: selection.effort, actualEffort: result.actualEffort, effortEvidence: result.effortEvidence,
+      effectiveEffort: resolveModelSelection(this.config.routes[selected], selected === decision.route ? options.requestedEffort : this.config.fallback.reasoningEffort ?? options.requestedEffort).effort, actualEffort: result.actualEffort, effortEvidence: result.effortEvidence,
       actualModel: result.actualModel, workerRunId: result.runId, attempts,
       modelEvidence: result.modelEvidence ?? 'native-child-model-request', response: message };
     await writeFile(path.join(directory, 'result.json'), JSON.stringify(evidence, null, 2), { flag: 'wx', mode: 0o600 });
@@ -155,18 +160,50 @@ export class ModelRelay {
       } catch { throw new BridgeError('INVALID_CWD', 'Workspace must be an existing directory.'); }
       if (!options.transport?.sessionId) throw new BridgeError('INVALID_SESSION_INPUT', 'Writable Claude tasks require x-session-id for safe session continuity.');
     }
-    const streamed = Boolean(onContentDelta) && !body.response_format;
+    const candidates = this.config.fallback.enabled ? this.config.fallback.routes[decision.route] ?? [] : [];
+    const handoffFile = options.transport?.sessionId && candidates.length
+      ? path.join(this.stateDirectory, `fallback-${hash(JSON.stringify([options.transport.sessionId, options.transport.sessionType ?? 'chat', decision.route]))}.json`) : null;
+    const policyHash = hash(JSON.stringify(route.execution ?? 'read-only'));
+    if (handoffFile) {
+      let saved;
+      try { saved = JSON.parse(await readFile(handoffFile, 'utf8')); }
+      catch (error) { if (error.code !== 'ENOENT') throw new BridgeError('INVALID_FALLBACK_STATE', 'Could not read the saved worker handoff.'); }
+      if (saved) {
+        if (saved.cwd !== workspace || saved.policyHash !== policyHash || !candidates.includes(saved.route) ||
+            saved.effort !== this.config.fallback.reasoningEffort) throw new BridgeError('FALLBACK_SCOPE_CHANGED', 'The saved worker handoff belongs to a different workspace or policy.');
+        return this.delegateFallback(body, decision, options, id, saved);
+      }
+    }
+    // A failed Claude stream cannot be retracted. Buffer fallback-enabled turns
+    // until the selected worker finishes, so partial replies never hide GPT output.
+    const streamed = Boolean(onContentDelta) && !body.response_format && !candidates.length;
     const invoke = session => this.call(decision.route, task, { ...options, cwd: workspace,
-      ...session, ...(streamed ? { onPartial: onContentDelta } : {}) });
+      ...session, skipCooldown: candidates.length > 0 && this.config.fallback.on.includes('RATE_LIMITED'),
+      ...(streamed ? { onPartial: onContentDelta } : {}) });
     const selection = resolveModelSelection(route, options.requestedEffort);
     let result;
-    if (writable || route.sessionContinuity) {
-      this.sessions ??= new ClaudeSessions(path.join(this.stateDirectory, 'sessions'));
-      result = await this.sessions.run({ sessionId: options.transport?.sessionId,
-        sessionType: options.transport?.sessionType ?? 'chat', cwd: workspace ?? bridgeRoot,
-        policy: route.execution ?? 'read-only', signal: options.signal,
-        fingerprint: delegationFingerprint(body, selection) }, invoke);
-    } else result = await invoke({});
+    try {
+      if (writable || route.sessionContinuity) {
+        this.sessions ??= new ClaudeSessions(path.join(this.stateDirectory, 'sessions'));
+        result = await this.sessions.run({ sessionId: options.transport?.sessionId,
+          sessionType: options.transport?.sessionType ?? 'chat', cwd: workspace ?? bridgeRoot,
+          policy: route.execution ?? 'read-only', signal: options.signal,
+          fingerprint: delegationFingerprint(body, selection) }, invoke);
+      } else result = await invoke({});
+    } catch (error) {
+      if (options.signal.aborted || !candidates.length || !this.config.fallback.on.includes(error.code)) throw error;
+      if (error.nativeExecutionStarted && !error.worker) throw new BridgeError('CLEANUP_UNCONFIRMED', 'The failed worker did not return execution cleanup evidence.');
+      const saved = { route: candidates[0], effort: this.config.fallback.reasoningEffort,
+        sourceCode: error.code, sourceRunId: error.worker?.runId, sourceLogs: error.worker?.logs,
+        cwd: workspace, policyHash, execution: route.execution ?? 'read-only', at: new Date().toISOString() };
+      await writeFile(path.join(options.directory, 'attempt-1.json'), JSON.stringify({ route: decision.route,
+        ok: false, code: error.code, runId: saved.sourceRunId }), { flag: 'wx', mode: 0o600 });
+      if (handoffFile) {
+        try { await writeFile(handoffFile, JSON.stringify(saved), { flag: 'wx', mode: 0o600 }); }
+        catch (writeError) { if (writeError.code !== 'EEXIST') throw writeError; }
+      }
+      return this.delegateFallback(body, decision, options, id, saved);
+    }
     const denied = result.permissionDenials ?? [];
     const message = { role: 'assistant', content: result.response + (denied.length
       ? `\n\n[Claude permission report: ${denied.length} tool request(s) were denied; no permission bypass was attempted. Inspect the reported task outcome before accepting it as complete.]` : '') };
@@ -178,6 +215,18 @@ export class ModelRelay {
       actualModel: result.actualModel, workerRunId: result.runId, modelEvidence: result.modelEvidence,
       zcodeSessionId: options.transport?.sessionId, zcodeSessionType: options.transport?.sessionType,
       contextFile, attempts: [{ route: decision.route, ok: true, runId: result.runId }], response: message };
+    await writeFile(path.join(options.directory, 'result.json'), JSON.stringify(evidence, null, 2), { flag: 'wx', mode: 0o600 });
+    return { message, evidence: { ...evidence, response: undefined } };
+  }
+
+  async delegateFallback(body, decision, options, id, saved) {
+    const handoff = `The delegated Claude worker stopped with ${saved.sourceCode}. Continue this same task using the host's declared tools. Preserve the assigned scope, read-only restrictions, and existing changes. The original worker execution policy is ${JSON.stringify(saved.execution)}; do not expand its file or command permissions. Inspect the current files and git status/diff before modifying anything; Claude may have completed part of the work. Do not replay completed steps or resume the failed Claude process.${saved.sourceLogs ? ` Its local execution evidence is in ${JSON.stringify(saved.sourceLogs)}; inspect it with host read tools when needed.` : ''}`;
+    const next = await this.complete({ ...body, model: saved.route, reasoning_effort: saved.effort,
+      messages: [{ role: 'system', content: handoff }, ...body.messages] }, { signal: options.signal, transport: options.transport });
+    const message = { ...next.message, content: `[Claude ${saved.sourceCode}: continuing with ${saved.route} / ${next.evidence.effectiveEffort}.]\n\n${next.message.content ?? ''}` };
+    const evidence = { ...next.evidence, id, mode: 'delegated-task-fallback', requestedModel: body.model,
+      requestedEffort: body.reasoning_effort, fallbackUsed: true, sourceCode: saved.sourceCode,
+      attempts: [{ route: decision.route, ok: false, code: saved.sourceCode, runId: saved.sourceRunId }, ...next.evidence.attempts], response: message };
     await writeFile(path.join(options.directory, 'result.json'), JSON.stringify(evidence, null, 2), { flag: 'wx', mode: 0o600 });
     return { message, evidence: { ...evidence, response: undefined } };
   }

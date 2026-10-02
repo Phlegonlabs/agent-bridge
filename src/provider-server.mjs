@@ -7,7 +7,7 @@ import { BridgeError } from './profiles.mjs';
 import { ProviderPool } from './provider-pool.mjs';
 import { ModelRelay } from './provider-relay.mjs';
 import { validateChat, completion } from './provider-protocol.mjs';
-import { validateRouteReasoning } from './model-options.mjs';
+import { validateRouteReasoning, resolveModelSelection } from './model-options.mjs';
 import { normalizeClaudeExecution } from './claude-permissions.mjs';
 export const providerState = path.join(bridgeRoot, '.bridge', 'provider');
 export async function localToken() {
@@ -27,7 +27,7 @@ export function validateProviderConfig(config) {
   for (const [name, limit] of Object.entries(config.limits)) if (!/^[a-z][a-z0-9-]{0,50}$/.test(name) ||
       limit !== null && (!Number.isInteger(limit) || limit < 1 || limit > 14)) fail();
   if (!Number.isInteger(config.attemptTimeoutMs) || config.attemptTimeoutMs < 1000 || config.attemptTimeoutMs > 540000 ||
-      !Number.isInteger(config.requestTimeoutMs) || config.requestTimeoutMs < config.attemptTimeoutMs || config.requestTimeoutMs > 540000) fail();
+      !Number.isInteger(config.requestTimeoutMs) || config.requestTimeoutMs < config.attemptTimeoutMs || config.requestTimeoutMs > 1200000) fail();
   if (!config.routes || typeof config.routes !== 'object' || Array.isArray(config.routes) || Object.keys(config.routes).length > 64) fail();
   for (const [id, route] of Object.entries(config.routes)) {
     validateRouteReasoning(route);
@@ -50,11 +50,15 @@ export function validateProviderConfig(config) {
         route.pool !== undefined && (typeof route.pool !== 'string' || !/^[a-z][a-z0-9-]{0,50}$/.test(route.pool))) fail();
   }
   if (!config.fallback || typeof config.fallback.enabled !== 'boolean' || !Array.isArray(config.fallback.on) ||
-      config.fallback.on.some(code => !['PROVIDER_UNAVAILABLE', 'CURSOR_MODEL_UNAVAILABLE'].includes(code)) ||
+      config.fallback.on.some(code => !['PROVIDER_UNAVAILABLE', 'CURSOR_MODEL_UNAVAILABLE', 'RATE_LIMITED', 'TIMEOUT'].includes(code)) ||
       !config.fallback.routes || typeof config.fallback.routes !== 'object') fail();
   for (const [id, candidates] of Object.entries(config.fallback.routes)) {
     if (!Object.hasOwn(config.routes, id) || !Array.isArray(candidates) || candidates.length > 2 ||
         new Set([id, ...candidates]).size !== candidates.length + 1 || candidates.some(candidate => !Object.hasOwn(config.routes, candidate))) fail();
+    for (const candidate of candidates) {
+      if (config.routes[id].mode === 'delegate' && config.routes[candidate].provider !== 'codex') fail();
+      if (config.fallback.reasoningEffort !== undefined) resolveModelSelection(config.routes[candidate], config.fallback.reasoningEffort);
+    }
   }
   return config;
 }
@@ -95,7 +99,7 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) { send(res, 401, { error: { message: 'Invalid local provider key.', type: 'authentication_error' } }); return; }
       if (req.method === 'POST' && req.url === '/shutdown') { send(res, 202, { stopping: true }); void server.shutdown(); return; }
       if (req.method === 'GET' && req.url === '/v1/models') { send(res, 200, { object: 'list', data: modelIds.map(id => ({ id, object: 'model', created: 0, owned_by: 'local-workflow-bridge' })) }); return; }
-      if (req.method === 'GET' && req.url === '/status') { send(res, 200, { ...pool.snapshot(), fallbackEnabled: config.fallback.enabled, routes: modelIds }); return; }
+      if (req.method === 'GET' && req.url === '/status') { send(res, 200, { ...pool.snapshot(), fallbackEnabled: config.fallback.enabled, fallback: config.fallback, routes: modelIds }); return; }
       if (req.method !== 'POST' || req.url !== '/v1/chat/completions') { send(res, 404, { error: { message: 'Use /v1/chat/completions.', type: 'not_found' } }); return; }
       if (controllers.size >= 64) throw new BridgeError('QUEUE_FULL', 'Too many queued requests.');
       controller = new AbortController(); controllers.add(controller);
