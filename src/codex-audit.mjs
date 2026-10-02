@@ -16,8 +16,17 @@ export function createCodexAudit(model, requestedEffort = null) {
     if (!event || typeof event !== 'object' || Array.isArray(event)) reject('CODEX_INVALID_EVENT');
     eventCount++;
     if (errorCode) return;
-    if (event.type === 'error') reject('CODEX_REPORTED_ERROR');
     if (turnCompleted) reject('CODEX_EVENT_AFTER_TURN');
+    if (event.type === 'error') {
+      // Native exec reports in-progress reconnects as error events. Let its
+      // retry finish; completion, exit status and rollout still verify success.
+      const retry = typeof event.message === 'string'
+        ? /^Reconnecting\.\.\. ([1-9]\d*)\/([1-9]\d*) \([^\r\n]+\)$/.exec(event.message) : null;
+      if (!threadId || !retry || !Number.isSafeInteger(Number(retry[1])) ||
+          !Number.isSafeInteger(Number(retry[2])) || Number(retry[1]) > Number(retry[2])) reject('CODEX_REPORTED_ERROR');
+      warnings.push({ code: 'CODEX_RECONNECTING', message: event.message });
+      return;
+    }
     if (event.type === 'thread.started') {
       if (threadId) reject('CODEX_DUPLICATE_THREAD');
       if (typeof event.thread_id !== 'string' || !event.thread_id) reject('CODEX_SESSION_UNVERIFIED');

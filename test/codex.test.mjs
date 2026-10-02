@@ -17,7 +17,7 @@ function evaluate(events, execution = { exitCode: 0, reason: null }, rollout = v
   return audit.finish(execution, rollout);
 }
 
-async function codexFixture() {
+async function codexFixture({ reconnect = false } = {}) {
   const home = await mkdtemp(path.join(tmpdir(), 'agent-bridge-codex-home-'));
   const workspace = await mkdtemp(path.join(tmpdir(), 'agent-bridge-codex-run-'));
   await writeFile(path.join(home, 'models_cache.json'), JSON.stringify({
@@ -44,6 +44,7 @@ process.stdin.on('data', chunk => { prompt += chunk; });
 process.stdin.on('end', () => {
   const event = value => process.stdout.write(JSON.stringify(value) + '\\n');
   event({ type: 'thread.started', thread_id: 'fake-thread' });
+  if (${reconnect}) event({ type: 'error', message: 'Reconnecting... 2/5 (unexpected status 502 Bad Gateway: Our servers are currently overloaded. Please try again later.)' });
   event({ type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify({ args, prompt }) } });
   event({ type: 'turn.completed', usage: {} });
 });
@@ -118,6 +119,36 @@ test('Codex metadata fallback notice does not change the verified model contract
     { sessionConfirmed: true, reportedModel: 'gpt-6-luna' }).code, 'CODEX_MODEL_MISMATCH');
   const unrelated = { ...notice, item: { ...notice.item, message: notice.item.message.replace(model, 'gpt-6-luna') } };
   assert.equal(evaluate([thread, unrelated, message, turn]).code, 'CODEX_REPORTED_ERROR');
+});
+
+test('Codex lets native reconnects finish but still rejects failed or unverified turns', () => {
+  const retry = { type: 'error', message: 'Reconnecting... 2/5 (unexpected status 502 Bad Gateway: Our servers are currently overloaded. Please try again later.)' };
+  const result = evaluate([thread, retry, message, turn]);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.warnings, [{ code: 'CODEX_RECONNECTING', message: retry.message }]);
+  assert.equal(evaluate([thread, retry]).code, 'CODEX_RESULT_UNVERIFIED');
+  assert.equal(evaluate([thread, retry, message, turn], { exitCode: 1, reason: null }).code, 'CODEX_CLI_FAILED');
+  assert.equal(evaluate([thread, retry, { type: 'error', message: 'Exceeded retry limit.' }]).code, 'CODEX_REPORTED_ERROR');
+  assert.equal(evaluate([thread, retry, message, turn], undefined, { sessionConfirmed: false }).code, 'CODEX_SESSION_UNVERIFIED');
+  assert.equal(evaluate([thread, retry, message, turn], undefined, { sessionConfirmed: true, reportedModel: 'gpt-6-sol' }).code, 'CODEX_MODEL_MISMATCH');
+  for (const invalid of ['Reconnecting... 0/5 (failure)', 'Reconnecting... 6/5 (failure)', 'Reconnecting... 2/5', 'Request failed.']) {
+    assert.equal(evaluate([thread, { type: 'error', message: invalid }, message, turn]).code, 'CODEX_REPORTED_ERROR');
+  }
+  assert.equal(evaluate([retry, thread, message, turn]).code, 'CODEX_REPORTED_ERROR');
+  assert.equal(evaluate([thread, message, turn, retry]).code, 'CODEX_EVENT_AFTER_TURN');
+  assert.equal(evaluate([thread, retry, { type: 'item.completed', item: { type: 'command_execution' } }, message, turn]).code, 'CODEX_UNEXPECTED_TOOL');
+});
+
+test('runCodex does not terminate its worker for an in-progress native reconnect', async () => {
+  const { home, workspace, runtime } = await codexFixture({ reconnect: true });
+  await withCodexHome(home, async () => {
+    const result = await runCodex({ cwd: workspace, task: 'Continue after compaction.', model, effort: 'high', timeoutMs: 1000, codexBin: runtime });
+    assert.equal(result.ok, true);
+    assert.equal(result.execution.exitCode, 0);
+    assert.equal(result.execution.reason, null);
+    assert.equal(result.actualEffort, 'high');
+    assert.equal(result.warnings[0].code, 'CODEX_RECONNECTING');
+  });
 });
 
 test('Codex rejects duplicate threads, events after the turn, and malformed lines', () => {
