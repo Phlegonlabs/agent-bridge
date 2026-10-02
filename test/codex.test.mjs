@@ -107,6 +107,19 @@ test('Codex keeps a skill-budget notice and still requires a verified completed 
   assert.equal(evaluate([thread, notice, message, turn], undefined, { sessionConfirmed: false }).code, 'CODEX_SESSION_UNVERIFIED');
 });
 
+test('Codex metadata fallback notice does not change the verified model contract', () => {
+  const notice = { type: 'item.completed', item: { type: 'error',
+    message: `Model metadata for \`${model}\` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.` } };
+  const result = evaluate([thread, notice, message, turn]);
+  assert.equal(result.ok, true);
+  assert.equal(result.actualModel, `codex/${model}`);
+  assert.equal(result.warnings[0].code, 'CODEX_MODEL_METADATA_FALLBACK');
+  assert.equal(evaluate([thread, notice, message, turn], undefined,
+    { sessionConfirmed: true, reportedModel: 'gpt-6-luna' }).code, 'CODEX_MODEL_MISMATCH');
+  const unrelated = { ...notice, item: { ...notice.item, message: notice.item.message.replace(model, 'gpt-6-luna') } };
+  assert.equal(evaluate([thread, unrelated, message, turn]).code, 'CODEX_REPORTED_ERROR');
+});
+
 test('Codex rejects duplicate threads, events after the turn, and malformed lines', () => {
   assert.equal(evaluate([thread, thread, message, turn]).code, 'CODEX_DUPLICATE_THREAD');
   assert.equal(evaluate([thread, message, turn, { type: 'turn.started' }]).code, 'CODEX_EVENT_AFTER_TURN');

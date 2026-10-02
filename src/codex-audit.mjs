@@ -28,13 +28,14 @@ export function createCodexAudit(model, requestedEffort = null) {
         if (event.item.type === 'agent_message') {
           if (typeof event.item.text === 'string') finalResponse = event.item.text;
         } else if (event.item.type === 'error') {
-          // Codex reports trimmed skill descriptions as an error item, then
-          // continues the turn. Keep the notice without treating it as a tool.
+          // Codex emits these notices as error items and continues the turn.
+          // Metadata fallback keeps the requested model; verify it at finish.
           const message = event.item.message;
-          if (typeof message !== 'string' || !message.startsWith('Exceeded skills context budget.')) {
-            reject('CODEX_REPORTED_ERROR');
-          }
-          warnings.push({ code: 'CODEX_SKILLS_CONTEXT_BUDGET', message });
+          const metadataNotice = `Model metadata for \`${model}\` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.`;
+          const code = typeof message === 'string' && message.startsWith('Exceeded skills context budget.')
+            ? 'CODEX_SKILLS_CONTEXT_BUDGET' : message === metadataNotice ? 'CODEX_MODEL_METADATA_FALLBACK' : undefined;
+          if (!code) reject('CODEX_REPORTED_ERROR');
+          warnings.push({ code, message });
         } else if (!ALLOWED_ITEM_TYPES.has(event.item.type)) {
           // The relay task allows only built-in reads; a shell command, file edit,
           // MCP call or web search is outside the read-only worker contract.
