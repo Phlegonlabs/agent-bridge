@@ -6,6 +6,7 @@ const ALLOWED_ITEM_TYPES = new Set(['agent_message', 'reasoning', 'todo_list']);
 
 export function createCodexAudit(model, requestedEffort = null) {
   let threadId, turnCompleted, finalResponse, errorCode, eventCount = 0;
+  const warnings = [];
   const reject = code => { errorCode ??= code; throw new BridgeError(code, code); };
   function ingest(line) {
     if (!line.trim()) return;
@@ -26,6 +27,14 @@ export function createCodexAudit(model, requestedEffort = null) {
       if (event.type === 'item.completed' && event.item && typeof event.item === 'object') {
         if (event.item.type === 'agent_message') {
           if (typeof event.item.text === 'string') finalResponse = event.item.text;
+        } else if (event.item.type === 'error') {
+          // Codex reports trimmed skill descriptions as an error item, then
+          // continues the turn. Keep the notice without treating it as a tool.
+          const message = event.item.message;
+          if (typeof message !== 'string' || !message.startsWith('Exceeded skills context budget.')) {
+            reject('CODEX_REPORTED_ERROR');
+          }
+          warnings.push({ code: 'CODEX_SKILLS_CONTEXT_BUDGET', message });
         } else if (!ALLOWED_ITEM_TYPES.has(event.item.type)) {
           // The relay task allows only built-in reads; a shell command, file edit,
           // MCP call or web search is outside the read-only worker contract.
@@ -40,7 +49,8 @@ export function createCodexAudit(model, requestedEffort = null) {
     const actualEffort = typeof rollout.reportedEffort === 'string' ? rollout.reportedEffort : null;
     const effortEvidence = actualEffort === null ? 'not-reported-by-codex-rollout' : 'codex-rollout-turn-context';
     const base = { provider: 'codex', agent: 'codex-cli', expectedModel: `codex/${model}`, eventCount,
-      requestedEffort: requestedEffort ?? null, actualEffort, effortEvidence };
+      requestedEffort: requestedEffort ?? null, actualEffort, effortEvidence,
+      ...(warnings.length ? { warnings } : {}) };
     const fail = code => ({ ...base, ok: false, code });
     if (errorCode) return fail(errorCode);
     if (execution.reason) return fail(execution.reason.toUpperCase());

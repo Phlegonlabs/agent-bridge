@@ -92,6 +92,19 @@ test('Codex rejects relay-forbidden tool work and error events', () => {
   assert.equal(evaluate([thread, edit, message, turn]).code, 'CODEX_UNEXPECTED_TOOL');
   assert.equal(evaluate([thread, mcp, message, turn]).code, 'CODEX_UNEXPECTED_TOOL');
   assert.equal(evaluate([{ type: 'error', message: 'boom' }]).code, 'CODEX_REPORTED_ERROR');
+  assert.equal(evaluate([thread, { type: 'item.completed', item: { type: 'error', message: 'Request failed.' } }, message, turn]).code,
+    'CODEX_REPORTED_ERROR');
+});
+
+test('Codex keeps a skill-budget notice and still requires a verified completed turn', () => {
+  const notice = { type: 'item.completed', item: { id: 'item_0', type: 'error',
+    message: 'Exceeded skills context budget. All skill descriptions were removed and 1 additional skill was not included in the model-visible skills list.' } };
+  const completed = evaluate([thread, notice, message, turn]);
+  assert.equal(completed.ok, true);
+  assert.deepEqual(completed.warnings, [{ code: 'CODEX_SKILLS_CONTEXT_BUDGET', message: notice.item.message }]);
+  assert.equal(evaluate([thread, notice, message]).code, 'CODEX_RESULT_UNVERIFIED');
+  assert.equal(evaluate([thread, notice, message, turn], { exitCode: 1, reason: null }).code, 'CODEX_CLI_FAILED');
+  assert.equal(evaluate([thread, notice, message, turn], undefined, { sessionConfirmed: false }).code, 'CODEX_SESSION_UNVERIFIED');
 });
 
 test('Codex rejects duplicate threads, events after the turn, and malformed lines', () => {
