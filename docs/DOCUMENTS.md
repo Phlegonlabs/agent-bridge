@@ -12,3 +12,8 @@
 - `docs/native-provider.md`: native dropdown provider, connection settings and current verification limits.
 - `skills/codex-imagegen/SKILL.md`: ZCode instructions for native Codex image generation; set the bridge path for your checkout before installing.
 - `docs/epics/native-provider.md`: implementation scope and native protocol evidence.
+
+
+## Harness context maintenance
+
+- [Harness 0.61.0 context sync](epics/EPIC-harness-0.61-context-sync.md) — local governance and binding maintenance; no product or release approval.
