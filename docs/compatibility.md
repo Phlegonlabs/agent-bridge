@@ -6,13 +6,13 @@ The public CLI now supports per-provider setup/login/doctor/models, local config
 
 | Check | Evidence and limit |
 | --- | --- |
-| Windows offline suite | 165 tests passed after the setup and native Claude notification changes. |
+| Node 24 offline suite | 166 tests passed locally and in the [Windows / macOS / Linux CI matrix](https://github.com/Phlegonlabs/agent-bridge/actions/runs/37193690843). Clean runners have no provider accounts or personal agents. The first CI run exposed installed-CLI test dependencies, premature process-cleanup reporting and macOS system-link handling; the corrected matrix passed all three jobs. |
 | Fresh setup | Isolated fixture with no personal profiles: selected Codex/Claude routes, both registrations, unrelated provider preservation, repeated setup, backups and cancellation passed. This uses simulated catalogs, not new account logins. |
 | Windows Claude request | Native `claude-opus-5-5` returned `BRIDGE_PROBE_OK`; model/session/result evidence passed. A harmless `system/ui_invalidate` notice initially failed the old audit; the corrected audit passed the real retry and regression checks. |
 | Windows Codex request | Native `gpt-6.1-sol` returned `BRIDGE_PROBE_OK` with rollout model and completion evidence. |
 | Windows Cursor request | Native `composer-2.5` returned `BRIDGE_PROBE_OK` with init/result evidence. |
 | Current GLM workflow | Not revalidated live: the current account's five personal profiles do not satisfy the legacy read-only adapter, and the old `code_explorer` profile no longer exists. Generic `bridge-explorer` / `bridge-reviewer` samples now provide a non-overwriting setup path. Earlier successful trials below remain historical evidence. |
-| macOS / Linux | Runtime path fixtures pass locally. The Node 24 GitHub Actions matrix runs offline tests on all three platforms; authenticated model requests and desktop UI round trips on macOS/Linux remain unverified. |
+| macOS / Linux | Offline tests pass in the Node 24 GitHub Actions matrix. Authenticated model requests and desktop UI round trips on macOS/Linux remain unverified. |
 | ZCode desktop round trip | Not revalidated during this change. A native CLI marker does not certify the UI integration. The README includes the manual first-request check. |
 
 Private command logs and session receipts stay under `.bridge/` and are excluded from publication. Existing account settings, provider routing and sessions were not migrated or restarted for these checks.
