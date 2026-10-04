@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { readFile, writeFile, mkdir, stat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, stat, lstat } from 'node:fs/promises';
 import path from 'node:path';
 import { bridgeRoot } from './account.mjs';
 import { BridgeError } from './profiles.mjs';
@@ -9,11 +9,15 @@ import { ModelRelay } from './provider-relay.mjs';
 import { validateChat, completion } from './provider-protocol.mjs';
 import { validateRouteReasoning, resolveModelSelection } from './model-options.mjs';
 import { normalizeClaudeExecution } from './claude-permissions.mjs';
+import { providerConfigPath } from './provider-config-path.mjs';
+import { hash } from './profiles.mjs';
 export const providerState = path.join(bridgeRoot, '.bridge', 'provider');
-export async function localToken() {
-  await mkdir(providerState, { recursive: true, mode: 0o700 });
-  const file = path.join(providerState, 'token');
+export async function localToken(state = providerState) {
+  await mkdir(state, { recursive: true, mode: 0o700 });
+  if ((await lstat(state)).isSymbolicLink()) throw new BridgeError('UNSAFE_STATE_PATH', 'Provider state must not be a symbolic link.');
+  const file = path.join(state, 'token');
   try { await writeFile(file, randomBytes(32).toString('hex'), { flag: 'wx', mode: 0o600 }); } catch (error) { if (error.code !== 'EEXIST') throw error; }
+  if ((await lstat(file)).isSymbolicLink()) throw new BridgeError('UNSAFE_STATE_PATH', 'Provider token must not be a symbolic link.');
   const value = (await readFile(file, 'utf8')).trim();
   if (!/^[a-f0-9]{64}$/.test(value)) throw new BridgeError('INVALID_TOKEN', 'Invalid local provider token.');
   return value;
@@ -62,7 +66,8 @@ export function validateProviderConfig(config) {
   }
   return config;
 }
-export async function readProviderConfig(file = path.join(bridgeRoot, 'config', 'native-provider.json')) {
+export async function readProviderConfig(explicit) {
+  const file = await providerConfigPath(explicit);
   if ((await stat(file)).size > 131072) throw new BridgeError('INVALID_CONFIG', 'Provider configuration is too large.');
   return validateProviderConfig(JSON.parse(await readFile(file, 'utf8')));
 }
@@ -94,7 +99,7 @@ export function createProviderServer({ config, token, relay, pool = new Provider
     let timer, heartbeat, controller;
     try {
       if (req.headers.origin || !/^(127\.0\.0\.1|localhost):\d+$/.test(req.headers.host ?? '')) { send(res, 403, { error: { message: 'Loopback clients only.', type: 'access_denied' } }); return; }
-      if (req.method === 'GET' && req.url === '/health') { send(res, 200, { service: 'agent-bridge', version: 1, ready: !pool.stopped }); return; }
+      if (req.method === 'GET' && req.url === '/health') { send(res, 200, { service: 'agent-bridge', version: 1, ready: !pool.stopped, configSha256: hash(JSON.stringify(config)) }); return; }
       const actual = Buffer.from(req.headers.authorization ?? ''), expected = Buffer.from(`Bearer ${token}`);
       if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) { send(res, 401, { error: { message: 'Invalid local provider key.', type: 'authentication_error' } }); return; }
       if (req.method === 'POST' && req.url === '/shutdown') { send(res, 202, { stopping: true }); void server.shutdown(); return; }

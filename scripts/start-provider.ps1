@@ -1,7 +1,9 @@
 param()
 $ErrorActionPreference = 'Stop'
 $BridgeDirectory = Split-Path -Parent $PSScriptRoot
-$Config = Get-Content -LiteralPath (Join-Path $BridgeDirectory 'config/native-provider.json') -Raw | ConvertFrom-Json
+$ConfigPath = Join-Path $BridgeDirectory '.bridge/config/native-provider.json'
+if (-not (Test-Path -LiteralPath $ConfigPath)) { $ConfigPath = Join-Path $BridgeDirectory 'config/native-provider.json' }
+$Config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 try {
     $Health = Invoke-RestMethod -Uri "http://127.0.0.1:$($Config.port)/health" -TimeoutSec 2
     if ($Health.service -eq 'agent-bridge' -and $Health.ready) {

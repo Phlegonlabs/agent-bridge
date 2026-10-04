@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ProviderPool } from '../src/provider-pool.mjs';
 import { ModelRelay } from '../src/provider-relay.mjs';
 import { validateChat, parseRelay, correctiveRelayPrompt, completion, streamChunks } from '../src/provider-protocol.mjs';
 import { createProviderServer, readProviderConfig } from '../src/provider-server.mjs';
 import { appendProvider } from '../src/provider-registration.mjs';
-const config = await readProviderConfig();
+const config = await readProviderConfig(fileURLToPath(new URL('../config/native-provider.json', import.meta.url)));
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const body = { model: 'gpt-6.1-sol', messages: [{ role: 'user', content: 'probe' }], tools: [
   { type: 'function', function: { name: 'read_probe', parameters: { type: 'object', required: ['path'], properties: { path: { type: 'string' } }, additionalProperties: false } } },
