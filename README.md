@@ -130,7 +130,7 @@ node bin/bridge.mjs doctor --provider cursor --live --model composer-2.5 --cwd .
 
 `requestVerified: true` confirms the exact marker and native completion/model evidence for that CLI. It does not prove a ZCode UI round trip. To inspect UI requests, keep `.bridge/provider/requests` local and check the request's verified result; do not upload raw logs.
 
-Stop the foreground process with Ctrl+C. `node scripts/stop-provider.mjs` requests graceful shutdown of the configured provider and cancels active requests. Its legacy Windows scheduled-task installer remains available for existing users; cross-platform startup-at-login is not included in this version. A scheduled task can restart a stopped Windows provider.
+Stop the foreground process with Ctrl+C. `node scripts/stop-provider.mjs` requests graceful shutdown of the configured provider and cancels active requests; add `--config FILE` for a custom configuration. The legacy Windows scheduled-task installer remains available for existing users; cross-platform startup-at-login is not included in this version. A scheduled task can restart a stopped Windows provider.
 
 ## GLM: native connection and profile workflows
 

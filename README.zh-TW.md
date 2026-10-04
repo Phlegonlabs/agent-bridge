@@ -130,7 +130,7 @@ node bin/bridge.mjs doctor --provider cursor --live --model composer-2.5 --cwd .
 
 `requestVerified: true` 代表該 CLI 回傳正確 marker，且具備原生完成／模型證據；它不代表 ZCode UI 的完整連接已驗證。檢查 UI 請求時，在本機查看 `.bridge/provider/requests` 裏的已驗證結果，不要上傳原始紀錄。
 
-按 Ctrl+C 停止前景程序。`node scripts/stop-provider.mjs` 對目前設定的 provider 要求 graceful shutdown，也會取消執行中的請求。舊的 Windows scheduled-task 安裝器仍供現有使用者使用；這版不包含跨平台開機啟動。Scheduled task 可能重新啟動已停止的 Windows provider。
+按 Ctrl+C 停止前景程序。`node scripts/stop-provider.mjs` 對目前設定的 provider 要求 graceful shutdown，也會取消執行中的請求；自訂設定請加上 `--config FILE`。舊的 Windows scheduled-task 安裝器仍供現有使用者使用；這版不包含跨平台開機啟動。Scheduled task 可能重新啟動已停止的 Windows provider。
 
 ## GLM：原生連接及 Profile 工作流
 
