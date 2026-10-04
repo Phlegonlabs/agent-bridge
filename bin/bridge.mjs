@@ -2,9 +2,11 @@
 import { parseArgs } from 'node:util';
 import { readFile, stat } from 'node:fs/promises';
 import { listProfiles, publicProfile, BridgeError } from '../src/profiles.mjs';
-import { installedRuntime, runAgent } from '../src/bridge.mjs';
-import { loginAccount } from '../src/account.mjs';
-import { cursorRuntime, cursorDoctor, cursorModels, cursorLogin, runCursor } from '../src/cursor.mjs';
+import { runAgent } from '../src/bridge.mjs';
+import { providerDoctor, providerLogin, providerModels } from '../src/provider-tools.mjs';
+import { runSetup } from '../src/setup.mjs';
+import { runCodex } from '../src/codex.mjs';
+import { runCursor } from '../src/cursor.mjs';
 import { runClaude } from '../src/claude.mjs';
 import { readJsonFile, readPresets, selectPreset, runWorkflow, workflowOutput } from '../src/workflow.mjs';
 
@@ -20,24 +22,33 @@ try {
     'trust-workspace': { type: 'boolean', default: false },
     config: { type: 'string' }, preset: { type: 'string' }, 'parallel-limit': { type: 'string' },
     fallback: { type: 'string' }, task: { type: 'string' }, workers: { type: 'string' }, 'jobs-file': { type: 'string' },
-    'jobs-json': { type: 'string' },
+    'jobs-json': { type: 'string' }, live: { type: 'boolean', default: false },
+    providers: { type: 'string' }, models: { type: 'string' }, port: { type: 'string' },
+    'write-mode': { type: 'string' }, 'fallback-effort': { type: 'string' }, 'dry-run': { type: 'boolean', default: false },
   } });
   const command = positionals[0];
-  if (!['zcode', 'cursor', 'claude'].includes(values.provider)) throw new BridgeError('INVALID_PROVIDER', 'Provider must be zcode, cursor or claude.');
+  if (!['zcode', 'cursor', 'claude', 'codex'].includes(values.provider) && !(command === 'doctor' && values.provider === 'all')) throw new BridgeError('INVALID_PROVIDER', 'Provider must be zcode, cursor, claude or codex; doctor also accepts all.');
   if (values.provider === 'cursor' && (values.agent || values.cli || values['expected-model'])) throw new BridgeError('INVALID_ARGUMENT', 'Cursor uses --model and --cursor-dir, not ZCode agent or CLI options.');
-  if (values.provider === 'claude' && (values.agent || values.cli || values['expected-model'] || values['cursor-dir'] || values['trust-workspace'])) throw new BridgeError('INVALID_ARGUMENT', 'Claude uses --model only, not ZCode agent or Cursor options.');
-  if (values.provider === 'zcode' && (values.model || values['cursor-dir'] || values['trust-workspace'] && command !== 'workflow')) throw new BridgeError('INVALID_ARGUMENT', 'Cursor options require --provider cursor.');
+  if (['claude', 'codex'].includes(values.provider) && (values.agent || values.cli || values['expected-model'] || values['cursor-dir'] || values['trust-workspace'])) throw new BridgeError('INVALID_ARGUMENT', 'Claude uses --model only, not ZCode agent or Cursor options.');
+  if (values.provider === 'zcode' && command !== 'setup' && (values.model || values['cursor-dir'] || values['trust-workspace'] && command !== 'workflow')) throw new BridgeError('INVALID_ARGUMENT', 'Cursor options require --provider cursor.');
+  if (values.live && (command !== 'doctor' || values.provider === 'all')) throw new BridgeError('INVALID_ARGUMENT', 'Use --live with doctor and one explicit provider.');
+  if (command !== 'setup' && ['providers','models','port','write-mode','fallback-effort'].some(key => values[key] !== undefined) || values['dry-run'] && command !== 'setup') throw new BridgeError('INVALID_ARGUMENT', 'Setup options require setup.');
   const workflowOnly = ['config', 'preset', 'parallel-limit', 'fallback', 'task', 'workers', 'jobs-file', 'jobs-json'];
-  if (!['workflow', 'presets'].includes(command) && workflowOnly.some(key => values[key] !== undefined)) throw new BridgeError('INVALID_ARGUMENT', 'Workflow options require workflow or presets.');
+  if (!['workflow', 'presets', 'setup'].includes(command) && workflowOnly.some(key => values[key] !== undefined)) throw new BridgeError('INVALID_ARGUMENT', 'Workflow options require workflow or presets.');
   if (['workflow', 'presets'].includes(command) && (values.provider !== 'zcode' || values.agent || values.model || values.cli || values['expected-model'] || values['cursor-dir'] || values['timeout-ms'])) throw new BridgeError('INVALID_ARGUMENT', 'Workflow routes and deadlines come from the preset.');
   if (values.help || !command) {
-    emit({ commands: ['profiles', 'doctor', 'login', 'models', 'run', 'presets', 'workflow'], run: '--agent NAME --cwd DIRECTORY --task-file FILE [--expected-model PROVIDER/MODEL] [--timeout-ms 60000]',
+    emit({ commands: ['setup', 'profiles', 'doctor', 'login', 'models', 'run', 'presets', 'workflow'], setup: '--providers codex,claude,cursor --models PROVIDER:MODEL_ID,... --fallback off|CODEX_MODEL [--write-mode workspace-write|read-only] [--port 32147] [--config FILE] [--dry-run]', doctor: '--provider zcode|cursor|claude|codex|all [--live --model MODEL --cwd DIRECTORY]', run: '--agent NAME --cwd DIRECTORY --task-file FILE [--expected-model PROVIDER/MODEL] [--timeout-ms 60000]',
       workflow: '--cwd DIRECTORY (--task TEXT | --task-file FILE | --jobs-file FILE | --jobs-json JSON) [--preset NAME] [--workers explorer,reviewer,cursor] [--parallel-limit 14] [--fallback off|configured] [--trust-workspace]',
       cursor: '--provider cursor --model MODEL_ID --cwd DIRECTORY --task-file FILE [--trust-workspace] [--cursor-dir PACKAGE_DIRECTORY]',
       claude: '--provider claude --model claude-opus-5-5 --cwd DIRECTORY --task-file FILE [--timeout-ms 120000]',
       note: 'ZCode expected-model asserts profile identity. Cursor model selects a native model; Cursor runs in ask mode. Claude delegates one self-contained task to the native Claude Code CLI.' });
   } else if (positionals.length !== 1) throw new BridgeError('INVALID_ARGUMENT', 'Unexpected positional arguments.');
-  else if (command === 'presets') {
+  else if (command === 'setup') {
+    const setupReport = await runSetup({ ...values, writeMode: values['write-mode'], fallbackEffort: values['fallback-effort'],
+      dryRun: values['dry-run'], cursorDir: values['cursor-dir'], signal: controller.signal,
+      onAuthorizeUrl: url => process.stderr.write(`Authorize in your browser: ${url}\n`) });
+    emit(setupReport); if (!setupReport.ok) process.exitCode = 1;
+  } else if (command === 'presets') {
     if (workflowOnly.filter(key => key !== 'config').some(key => values[key] !== undefined) || values.cwd || values['task-file'] || values['trust-workspace']) throw new BridgeError('INVALID_ARGUMENT', 'presets only accepts --config.');
     emit(await readPresets(values.config));
   } else if (command === 'workflow') {
@@ -68,24 +79,15 @@ try {
     if (values.provider !== 'zcode') throw new BridgeError('INVALID_ARGUMENT', 'profiles lists ZCode profiles. Use models --provider cursor for Cursor.');
     emit({ profiles: (await listProfiles()).map(publicProfile) });
   } else if (command === 'models') {
-    if (values.provider !== 'cursor') throw new BridgeError('INVALID_ARGUMENT', 'models requires --provider cursor.');
-    emit(await cursorModels(await cursorRuntime(values['cursor-dir']), { signal: controller.signal }));
-  }
-  else if (command === 'doctor') {
-    if (values.provider === 'cursor') {
-      const report = await cursorDoctor(await cursorRuntime(values['cursor-dir']), { signal: controller.signal });
-      emit(report); if (!report.ok) process.exitCode = 1;
-    } else {
-    const runtime = await installedRuntime(values.cli);
-    emit({ ok: true, node: process.version, cli: runtime.prefix[0], builtinProviderConfigFound: true,
-      agentCount: (await listProfiles()).length,
-      modelAccess: 'unverified', note: 'Static preflight only. Desktop account providers may be unavailable to a standalone CLI.' });
-    }
+    emit(await providerModels(values.provider, { cli: values.cli, cursorDir: values['cursor-dir'], signal: controller.signal }));
+  } else if (command === 'doctor') {
+    const report = await providerDoctor(values.provider, { ...values, cursorDir: values['cursor-dir'],
+      expectedModel: values['expected-model'], trustWorkspace: values['trust-workspace'],
+      timeoutMs: values['timeout-ms'] === undefined ? undefined : Number(values['timeout-ms']), signal: controller.signal });
+    emit(report); if (!report.ok) process.exitCode = 1;
   } else if (command === 'login') {
-    const options = { signal: controller.signal, onAuthorizeUrl: url => process.stderr.write(`Authorize the bridge in your browser: ${url}\n`) };
-    const report = values.provider === 'cursor'
-      ? await cursorLogin(await cursorRuntime(values['cursor-dir']), options)
-      : await loginAccount(await installedRuntime(values.cli), options);
+    const report = await providerLogin(values.provider, { cli: values.cli, cursorDir: values['cursor-dir'], signal: controller.signal,
+      onAuthorizeUrl: url => process.stderr.write(`Authorize in your browser: ${url}\n`) });
     emit(report); if (!report.ok) process.exitCode = 1;
   } else if (command === 'run') {
     if (!values.cwd || !values['task-file'] || values.provider === 'zcode' && !values.agent || values.provider !== 'zcode' && !values.model) throw new BridgeError('INVALID_ARGUMENT', 'run requires --cwd, --task-file, and a ZCode --agent or a Cursor/Claude --model.');
@@ -97,6 +99,7 @@ try {
       ? await runCursor({ cwd: values.cwd, task, model: values.model, cursorDir: values['cursor-dir'], timeoutMs, signal: controller.signal, trustWorkspace: values['trust-workspace'] })
       : values.provider === 'claude'
         ? await runClaude({ cwd: values.cwd, task, model: values.model, timeoutMs, signal: controller.signal })
+        : values.provider === 'codex' ? await runCodex({ cwd: values.cwd, task, model: values.model, timeoutMs, signal: controller.signal })
         : await runAgent({ agent: values.agent, cwd: values.cwd, task,
       expectedModel: values['expected-model'], cliPath: values.cli,
       timeoutMs, signal: controller.signal });
