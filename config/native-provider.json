@@ -8,8 +8,8 @@
     "claude": 4,
     "codex": 4
   },
-  "attemptTimeoutMs": 420000,
-  "requestTimeoutMs": 900000,
+  "attemptTimeoutMs": 540000,
+  "requestTimeoutMs": 1200000,
   "fallback": {
     "enabled": true,
     "on": [
@@ -18,10 +18,14 @@
       "TIMEOUT",
       "RATE_LIMITED"
     ],
-    "reasoningEffort": "xhigh",
+    "reasoningEffort": "high",
     "routes": {
-      "claude-opus-5-5": ["gpt-6.1-sol"],
-      "claude-sonnet-5-5": ["gpt-6.1-sol"]
+      "claude-opus-5-5": [
+        "gpt-6.1-sol"
+      ],
+      "claude-sonnet-5-5": [
+        "gpt-6.1-sol"
+      ]
     }
   },
   "routes": {
