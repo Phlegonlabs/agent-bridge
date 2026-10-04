@@ -154,6 +154,66 @@ test('writable delegate resumes, replays duplicates and forwards effort and tool
  } finally {await rm(state,{recursive:true,force:true});pool.close();}
 });
 
+test('resumed turns delegate only new messages and re-render on history drift', async () => {
+  const state = await mkdtemp(path.join(tmpdir(), 'bridge-delta-delegate-'));
+  const pool = new ProviderPool({ limits: { claude: 2 } });
+  const route = { ...delegateRoute, execution: { mode: 'workspace-write', writeScope: './**', tools: ['Read', 'Edit(./**)'] } };
+  const tasks = [];
+  const relay = new ModelRelay({ routes: { 'claude-opus-5-5': route }, attemptTimeoutMs: 1000,
+    fallback: { enabled: false, on: [], routes: {} } }, pool,
+    async (r, task, opts) => { tasks.push(task); return { ...stubResponse, response: 'ok', sessionId: opts.session.id, sessionResume: opts.session.resume }; }, state);
+  const base = { model: 'claude-opus-5-5', messages: [
+    { role: 'system', content: `working directory: ${state}` },
+    { role: 'user', content: 'Implement the first stage of the plan.' },
+  ] };
+  const opts = { signal: new AbortController().signal, transport: { sessionId: 'delta-session', sessionType: 'chat' } };
+  try {
+    await relay.complete(base, opts);
+    assert.match(tasks[0], /Implement the first stage/);
+    assert.match(tasks[0], /session context \(data\)/, 'first turn carries the full transcript');
+    const grown = { ...base, messages: [...base.messages,
+      { role: 'assistant', content: 'Stage one is done.' },
+      { role: 'user', content: 'Now implement the second stage.' }] };
+    const second = await relay.complete(grown, opts);
+    assert.equal(second.evidence.contextMode, 'delta');
+    assert.doesNotMatch(tasks[1], /Implement the first stage/, 'prior turns are not re-sent');
+    assert.match(tasks[1], /Stage one is done\./);
+    assert.match(tasks[1], /implement the second stage/);
+    assert.equal(second.evidence.contextFile, null, 'a small delta stays inline');
+    const receipt = await relay.sessions.inspect({ sessionId: 'delta-session', sessionType: 'chat' });
+    assert.equal(receipt.turns.at(-1).context.messageCount, grown.messages.length);
+    // Host-side history edits (e.g. its own compaction) must fall back to a full render.
+    const edited = { ...base, messages: [...base.messages.map((message, index) =>
+      index === 1 ? { role: 'user', content: 'Implement the revised first stage.' } : message),
+      { role: 'user', content: 'Continue from there.' }] };
+    const third = await relay.complete(edited, opts);
+    assert.equal(third.evidence.contextMode, 'full');
+    assert.match(tasks[2], /Implement the revised first stage/);
+  } finally { await rm(state, { recursive: true, force: true }); pool.close(); }
+});
+
+test('renderDelegation delta matching is exact and self-guarding', async () => {
+  const messages = [
+    { role: 'system', content: 'working directory: C:\\project' },
+    { role: 'user', content: 'first turn work' },
+  ];
+  const full = await renderDelegation({ messages }, '.');
+  assert.equal(full.mode, 'full');
+  assert.equal(full.context.messageCount, 2);
+  const grown = [...messages, { role: 'user', content: 'second turn work' }];
+  const delta = await renderDelegation({ messages: grown }, '.', full.context);
+  assert.equal(delta.mode, 'delta');
+  assert.match(delta.task, /second turn work/);
+  assert.doesNotMatch(delta.task, /first turn work/);
+  assert.equal(delta.context.messageCount, 3);
+  const drifted = await renderDelegation({ messages: [...grown.slice(0, 1), { role: 'user', content: 'rewritten first turn' }, { role: 'user', content: 'next' }] }, '.', full.context);
+  assert.equal(drifted.mode, 'full', 'a rewritten prefix re-renders everything');
+  const malformed = await renderDelegation({ messages: grown }, '.', { messageCount: 2, prefixHash: 'not-the-hash' });
+  assert.equal(malformed.mode, 'full');
+  const beyond = await renderDelegation({ messages: grown }, '.', { messageCount: 99, prefixHash: 'x' });
+  assert.equal(beyond.mode, 'full');
+});
+
 test('queued cancellation restores the Claude receipt and invalid cwd is explicit', async () => {
  const state=await mkdtemp(path.join(tmpdir(),'bridge-queue-delegate-'));
  const pool=new ProviderPool({limits:{claude:1}}), release=await pool.acquire('claude');

@@ -32,6 +32,16 @@ function jsonHash(value) {
   return hash(JSON.stringify(stableJson(value)));
 }
 
+export { jsonHash };
+
+// Continuation marker on a completed turn: how many request messages the
+// native session has already seen, keyed by a stable-order hash of them.
+function validTurnContext(value) {
+  return value === undefined || (value !== null && typeof value === 'object' && !Array.isArray(value) &&
+    Number.isInteger(value.messageCount) && value.messageCount >= 0 &&
+    typeof value.prefixHash === 'string');
+}
+
 async function canonicalDirectory(value) {
   try {
     const resolved = await realpath(value);
@@ -108,7 +118,7 @@ export class ClaudeSessions {
       !['running', 'uncertain', 'completed', 'resumable'].includes(receipt.status) ||
       !Array.isArray(receipt.turns) || receipt.turns.length > TURN_LIMIT ||
       receipt.turns.some(turn => typeof turn?.fingerprintHash !== 'string' ||
-        (turn.status !== 'completed' && turn.status !== 'uncertain'))) {
+        (turn.status !== 'completed' && turn.status !== 'uncertain') || !validTurnContext(turn.context))) {
       throw new BridgeError('SESSION_STATE_INVALID', 'Claude session state did not match its schema.');
     }
     return receipt;
@@ -246,7 +256,8 @@ export class ClaudeSessions {
       try {
         request.signal?.throwIfAborted();
         const result = await callback({ session: { id: nativeSessionId, resume },
-          onNativeStarted: () => { executionStarted = true; } });
+          onNativeStarted: () => { executionStarted = true; },
+          priorContext: receipt?.turns?.at(-1)?.context ?? null });
         this.#validateResult(result);
         const spawnEvidence = executionStarted ||
           Number.isInteger(result.execution?.pid) && result.execution.pid > 0;
@@ -266,12 +277,15 @@ export class ClaudeSessions {
           });
           return result;
         }
+        let turnMarker;
+        try { turnMarker = request.turnContext?.(); } catch { turnMarker = undefined; }
         const completed = {
           ...running,
           status: 'completed',
           completedAt: new Date().toISOString(),
           turns: [...running.turns, { status: 'completed', fingerprintHash, result,
-            completedAt: new Date().toISOString() }],
+            completedAt: new Date().toISOString(),
+            ...(validTurnContext(turnMarker) && turnMarker ? { context: turnMarker } : {}) }],
         };
         await this.#writeAtomic(this.#statePath(keyHash), completed);
         return result;

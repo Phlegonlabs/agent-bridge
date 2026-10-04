@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ClaudeSessions } from '../src/claude-sessions.mjs';
@@ -191,6 +191,42 @@ test('a machine-killed worker leaves the session resumable', async () => {
     await assert.rejects(sessions.run(request(), unconfirmed), { code: 'TIMEOUT' });
     await assert.rejects(sessions.run(request({ fingerprint: 'retry' }), unconfirmed), { code: 'SESSION_RECOVERY_REQUIRED' });
     assert.equal((await sessions.inspect(request())).status, 'uncertain');
+  });
+});
+
+test('completed turns record a continuation context and hand it to the next callback', async () => {
+  await withState(async directory => {
+    const sessions = new ClaudeSessions(directory);
+    const marker = { messageCount: 2, prefixHash: 'a'.repeat(64) };
+    await sessions.run(request({ fingerprint: 'first' }), async input => {
+      assert.equal(input.priorContext, null);
+      return worker(input, 'first');
+    });
+    await sessions.run(request({ fingerprint: 'second', turnContext: () => marker }), async input => {
+      assert.deepEqual(input.priorContext, null, 'the prior turn recorded no context');
+      return worker(input, 'second');
+    });
+    await sessions.run(request({ fingerprint: 'third' }), async input => {
+      assert.deepEqual(input.priorContext, marker);
+      return worker(input, 'third');
+    });
+    const receipt = await sessions.inspect(request());
+    assert.deepEqual(receipt.turns.map(turn => turn.context), [undefined, marker, undefined]);
+  });
+});
+
+test('malformed turn context in stored state is rejected', async () => {
+  await withState(async directory => {
+    const sessions = new ClaudeSessions(directory);
+    await sessions.run(request(), async input => worker(input, 'ok'));
+    const keyHash = (await import('node:crypto')).createHash('sha256').update(
+      JSON.stringify(['zcode-session-1', 'subagent'])).digest('hex');
+    const file = path.join(directory, 'keys', `${keyHash}.json`);
+    const receipt = JSON.parse(await readFile(file, 'utf8'));
+    receipt.turns[0].context = { messageCount: -1, prefixHash: 42 };
+    await writeFile(file, JSON.stringify(receipt), 'utf8');
+    await assert.rejects(sessions.run(request({ fingerprint: 'next' }), async input => worker(input, 'next')),
+      { code: 'SESSION_STATE_INVALID' });
   });
 });
 
