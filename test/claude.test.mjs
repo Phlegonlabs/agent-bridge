@@ -23,6 +23,14 @@ test('Claude requires native session/model evidence and terminal success', () =>
   assert.equal(evaluate([assistant, terminal]).ok, false);
 });
 
+test('native UI invalidation notices do not replace required init or hide session mismatches', () => {
+  const notice = { type: 'system', subtype: 'ui_invalidate', event: 'ui.render', uuid: 'notice', session_id: 'session' };
+  assert.equal(evaluate([notice, init, assistant, terminal]).ok, true);
+  assert.equal(evaluate([notice]).code, 'CLAUDE_RESULT_UNVERIFIED');
+  assert.equal(evaluate([init, { ...notice, session_id: 'other' }, terminal]).code, 'CLAUDE_SESSION_MISMATCH');
+  assert.equal(evaluate([{ ...notice, event: 'unknown' }, init, terminal]).code, 'CLAUDE_INIT_MISSING');
+});
+
 test('Claude rejects model fallback but tolerates bracketed variants', () => {
   assert.equal(reportedModelMatches(model, 'claude-opus-5-5'), true);
   assert.equal(reportedModelMatches(model, 'claude-opus-5-5[1m]'), true);

@@ -22,6 +22,14 @@ export function createClaudeAudit(model, { expectedSessionId, effort = null, mod
     catch { if (init) reject('CLAUDE_INVALID_EVENT'); return; }
     if (!event || typeof event !== 'object' || Array.isArray(event)) reject('CLAUDE_INVALID_EVENT');
     eventCount++;
+    // Recent native CLIs send a UI cache notice before system/init. It is not
+    // model/session evidence; the required init and terminal result still apply.
+    if (event.type === 'system' && event.subtype === 'ui_invalidate' &&
+        event.event === 'ui.render' && typeof event.uuid === 'string' && typeof event.session_id === 'string' &&
+        Object.keys(event).every(key => ['type', 'subtype', 'event', 'uuid', 'session_id'].includes(key))) {
+      if ((init?.sessionId ?? expectedSessionId) && event.session_id !== (init?.sessionId ?? expectedSessionId)) reject('CLAUDE_SESSION_MISMATCH');
+      return;
+    }
     if (Array.isArray(event.permission_denials) && event.permission_denials.length) {
       permissionDenials = [...permissionDenials, ...event.permission_denials];
       if (mode !== 'workspace-write') reject('CLAUDE_PERMISSION_DENIED');
