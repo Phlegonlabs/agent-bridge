@@ -13,13 +13,13 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const body = { model: 'gpt-6.1-sol', messages: [{ role: 'user', content: 'probe' }], tools: [
   { type: 'function', function: { name: 'read_probe', parameters: { type: 'object', required: ['path'], properties: { path: { type: 'string' } }, additionalProperties: false } } },
 ] };
-test('native registration appends only the new provider and never replaces an existing entry', () => {
+test('native registration uses the same provider split as updates and preserves unrelated entries', () => {
   const prior = { schemaVersion: 1, config: { providerOrder: ['existing'], providerConfigRules: { providerRules: [{ providerId: 'existing', config: { access: { apiKey: 'private-test-value' } } }] }, modelConfigRules: { providerModelRules: [], manualProviderModelRules: [] } } };
   const next = appendProvider(prior, config, 'local-test-key');
   assert.deepEqual(next.config.providerConfigRules.providerRules[0], prior.config.providerConfigRules.providerRules[0]);
   assert.equal(prior.config.providerConfigRules.providerRules.length, 1);
-  assert.equal(next.config.providerConfigRules.providerRules.at(-1).providerId, 'workflow-bridge');
-  assert.throws(() => appendProvider(next, config, 'changed'), { code: 'PROVIDER_ALREADY_EXISTS' });
+  assert.deepEqual(next.config.providerConfigRules.providerRules.slice(1).map(r => r.providerId), ['workflow-bridge', 'claude-bridge']);
+  assert.deepEqual(appendProvider(next, config, 'local-test-key'), next);
 });
 test('relay protocol validates tools, schemas, required choice and returned nonce', () => {
   validateChat(body, [body.model]);
