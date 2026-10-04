@@ -1,5 +1,3 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { mkdir, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -8,26 +6,15 @@ import { BridgeError, hash } from './profiles.mjs';
 import { runProcess } from './process.mjs';
 import { createClaudeAudit } from './claude-audit.mjs';
 import { normalizeClaudeEffort, normalizeClaudeExecution, newSessionId } from './claude-permissions.mjs';
+import { nativeExecutable } from './runtime-paths.mjs';
 
-const execute = promisify(execFile);
-const SHIM_EXTENSIONS = new Set(['.cmd', '.bat', '.ps1']);
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // Node spawns without a shell, so an npm launcher shim cannot be executed
 // (spawn EINVAL); only the native binary is a usable Claude runtime.
 export async function claudeRuntime(resolved = process.env.CLAUDE_BRIDGE_BIN) {
-  let located = resolved;
-  if (!located) {
-    const lookup = await execute(process.platform === 'win32' ? 'where.exe' : 'which',
-      [process.platform === 'win32' ? 'claude.exe' : 'claude'], { timeout: 8000, windowsHide: true });
-    located = lookup.stdout.trim().split(/\r?\n/)[0];
-  }
-  if (!located) throw new BridgeError('CLAUDE_NOT_INSTALLED', 'Claude Code CLI was not found on PATH.');
-  if (SHIM_EXTENSIONS.has(path.extname(located).toLowerCase())) {
-    throw new BridgeError('CLAUDE_RUNTIME_INVALID', 'Claude resolved to an npm launcher shim; install the native Claude Code binary instead.');
-  }
-  const command = await realpath(located);
+  const command = await nativeExecutable('claude', resolved);
   return { command, prefix: [], env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' } };
 }
 

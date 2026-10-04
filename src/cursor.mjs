@@ -6,10 +6,19 @@ import { BridgeError, hash } from './profiles.mjs';
 import { runProcess } from './process.mjs';
 import { createCursorAudit, parseCursorModels } from './cursor-audit.mjs';
 import { normalizeEffortValue, selectCursorModel } from './model-options.mjs';
+import { nativeExecutable } from './runtime-paths.mjs';
 
 export const cursorBuild = '2026.09.18-9a7762b';
 export async function cursorRuntime(directory = process.env.CURSOR_BRIDGE_DIR) {
-  const root = await realpath(directory ?? path.join(bridgeRoot, '.bridge', 'tools', `cursor-${cursorBuild}`, 'dist-package'));
+  const pinned = path.join(bridgeRoot, '.bridge', 'tools', `cursor-${cursorBuild}`, 'dist-package');
+  if (!directory && !process.env.CURSOR_BRIDGE_BIN) {
+    try { await stat(pinned); directory = pinned; } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  }
+  if (!directory) {
+    const command = await nativeExecutable('agent', process.env.CURSOR_BRIDGE_BIN);
+    return { command, prefix: [], env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0', CURSOR_INVOKED_AS: 'cursor-agent' } };
+  }
+  const root = await realpath(directory);
   const metadata = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
   if (metadata.name !== '@anysphere/agent-cli-runtime') throw new BridgeError('INVALID_CURSOR_RUNTIME', 'Select an official Cursor CLI package directory.');
   const command = await realpath(path.join(root, process.platform === 'win32' ? 'node.exe' : 'node'));

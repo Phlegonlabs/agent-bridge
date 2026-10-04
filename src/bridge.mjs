@@ -5,9 +5,10 @@ import { BridgeError, resolveProfile, hash, publicProfile, requireReadOnlyProfil
 import { runProcess } from './process.mjs';
 import { createAudit } from './audit.mjs';
 import { accountEnvironment, bridgeRoot } from './account.mjs';
+import { findZcodeBundle } from './runtime-paths.mjs';
 
 export async function installedRuntime(cliPath = process.env.ZCODE_BRIDGE_CLI) {
-  const cli = await realpath(cliPath ?? 'C:\\Program Files\\ZCode\\resources\\glm\\zcode.cjs');
+  const cli = await findZcodeBundle(cliPath);
   if (path.extname(cli) !== '.cjs') throw new BridgeError('INVALID_CLI', 'This adapter expects the official zcode.cjs bundle.');
   const providerConfig = path.resolve(path.dirname(cli), '../config/provider/zcode-builtin.json');
   await stat(providerConfig);

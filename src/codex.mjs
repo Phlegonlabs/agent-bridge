@@ -1,5 +1,3 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { glob, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -8,24 +6,13 @@ import { BridgeError, hash } from './profiles.mjs';
 import { runProcess } from './process.mjs';
 import { createCodexAudit } from './codex-audit.mjs';
 import { codexHomeDirectory, codexModelCatalog, normalizeEffortValue, selectCodexModel } from './model-options.mjs';
+import { nativeExecutable } from './runtime-paths.mjs';
 
-const execute = promisify(execFile);
-const SHIM_EXTENSIONS = new Set(['.cmd', '.bat', '.ps1']);
 
 // Node spawns without a shell, so an npm launcher shim cannot be executed
 // (spawn EINVAL); only the native codex binary is a usable runtime.
 export async function codexRuntime(resolved = process.env.CODEX_BRIDGE_BIN) {
-  let located = resolved;
-  if (!located) {
-    const lookup = await execute(process.platform === 'win32' ? 'where.exe' : 'which',
-      [process.platform === 'win32' ? 'codex.exe' : 'codex'], { timeout: 8000, windowsHide: true });
-    located = lookup.stdout.trim().split(/\r?\n/)[0];
-  }
-  if (!located) throw new BridgeError('CODEX_NOT_INSTALLED', 'Codex CLI was not found on PATH.');
-  if (SHIM_EXTENSIONS.has(path.extname(located).toLowerCase())) {
-    throw new BridgeError('CODEX_RUNTIME_INVALID', 'Codex resolved to an npm launcher shim; install the native Codex binary instead.');
-  }
-  const command = await realpath(located);
+  const command = await nativeExecutable('codex', resolved);
   return { command, prefix: [], env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' } };
 }
 
