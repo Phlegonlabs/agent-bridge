@@ -57,14 +57,25 @@ export function buildSetupConfig({ catalogs, selections, port = 32147, writeMode
     fallback: { enabled: fallback !== 'off', on: ['TIMEOUT', 'RATE_LIMITED'], reasoningEffort: fallbackEffort, routes: fallbackRoutes }, routes });
 }
 
-export async function saveSetupConfig(config, { root = bridgeRoot, file = localProviderConfig(root) } = {}) {
-  validateProviderConfig(config);
-  await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
-  // Refuse symlinks in the destination's existing parent chain.
-  for (let directory = path.dirname(path.resolve(file));;) {
-    if ((await lstat(directory)).isSymbolicLink()) throw new BridgeError('UNSAFE_CONFIG', 'Setup configuration cannot be stored through symlinks.');
+async function checkConfigParents(file, root) {
+  const anchor = path.resolve(root), destination = path.resolve(file);
+  const relative = path.relative(anchor, destination);
+  const insideRoot = relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+  // The user-selected workspace may live beneath a system link (macOS /var).
+  // Refuse redirected storage inside it, before creating any directories.
+  for (let directory = path.dirname(destination);;) {
+    if (insideRoot && directory === anchor) break;
+    try {
+      if ((await lstat(directory)).isSymbolicLink()) throw new BridgeError('UNSAFE_CONFIG', 'Setup configuration cannot be stored through symlinks.');
+    } catch (error) { if (error.code !== 'ENOENT') throw error; }
     const parent = path.dirname(directory); if (parent === directory) break; directory = parent;
   }
+}
+
+export async function saveSetupConfig(config, { root = bridgeRoot, file = localProviderConfig(root) } = {}) {
+  validateProviderConfig(config);
+  await checkConfigParents(file, root);
+  await mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
   let previous;
   try {
     if ((await lstat(file)).isSymbolicLink()) throw new BridgeError('UNSAFE_CONFIG', 'Setup configuration must be a regular file.');
@@ -75,6 +86,7 @@ export async function saveSetupConfig(config, { root = bridgeRoot, file = localP
   let backup;
   if (previous !== undefined) {
     const directory = path.join(root, '.bridge', 'config', 'backups');
+    await checkConfigParents(path.join(directory, 'backup.json'), root);
     await mkdir(directory, { recursive: true, mode: 0o700 });
     backup = path.join(directory, `${randomUUID()}.json`);
     await writeFile(backup, previous, { flag: 'wx', mode: 0o600 });

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, readdir, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { buildSetupConfig, saveSetupConfig, runSetup } from '../src/setup.mjs';
@@ -62,6 +62,20 @@ test('fresh setup registers both providers without personal agents, preserves un
   const second = await runSetup(settings, dependencies);
   assert.equal(second.changed, false); assert.equal(second.registration.changed, false);
   assert.equal(await readFile(nativeFile, 'utf8'), JSON.stringify(stored, null, 2) + '\n');
+});
+
+test('setup accepts a linked workspace ancestor but rejects redirected local storage before writes', async () => {
+  const container = await mkdtemp(path.join(tmpdir(), 'bridge-links-'));
+  const actual = path.join(container, 'actual'); await mkdir(actual);
+  const alias = path.join(container, 'alias');
+  await symlink(actual, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  const root = path.join(alias, 'workspace'); await mkdir(root);
+  assert.equal((await saveSetupConfig(buildSetupConfig(options), { root })).changed, true);
+  const redirected = path.join(container, 'redirected'); await mkdir(redirected);
+  const unsafeRoot = path.join(actual, 'unsafe'); await mkdir(unsafeRoot);
+  await symlink(redirected, path.join(unsafeRoot, '.bridge'), process.platform === 'win32' ? 'junction' : 'dir');
+  await assert.rejects(saveSetupConfig(buildSetupConfig(options), { root: unsafeRoot }), { code: 'UNSAFE_CONFIG' });
+  assert.deepEqual(await readdir(redirected), []);
 });
 
 test('dry run and cancellation do not register or save settings; missing selected CLI fails before writes', async () => {
