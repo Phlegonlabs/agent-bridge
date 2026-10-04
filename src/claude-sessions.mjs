@@ -281,9 +281,16 @@ export class ClaudeSessions {
           if (receipt) await this.#writeAtomic(this.#statePath(keyHash), receipt);
           else await unlink(this.#statePath(keyHash)).catch(() => {});
         } else {
+          // A machine timeout or cancellation whose process tree was reaped
+          // leaves no worker behind: the native session can be resumed next
+          // turn instead of requiring manual recovery.
+          const cleanup = error?.worker?.execution?.cleanup;
+          const machineKilled = (code === 'TIMEOUT' || code === 'CANCELLED') &&
+            cleanup?.status === 'terminated' && Array.isArray(cleanup.survivors) && cleanup.survivors.length === 0;
+          if (machineKilled) error.sessionResumable = true;
           await this.#writeAtomic(this.#statePath(keyHash), {
             ...running,
-            status: 'uncertain',
+            status: machineKilled ? 'resumable' : 'uncertain',
             failure: { code, at: new Date().toISOString() },
           }).catch(() => {});
         }

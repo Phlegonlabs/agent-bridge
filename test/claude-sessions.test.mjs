@@ -6,6 +6,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ClaudeSessions } from '../src/claude-sessions.mjs';
+import { BridgeError } from '../src/profiles.mjs';
 
 const execute = promisify(execFile);
 const policy = { execution: { mode: 'full-access', timeoutMs: 60000 } };
@@ -158,6 +159,38 @@ test('a genuine post-spawn failure leaves the session uncertain', async () => {
     await assert.rejects(sessions.run(request({ fingerprint: 'retry' }), failing), { code: 'SESSION_RECOVERY_REQUIRED' });
     assert.equal((await sessions.inspect(request())).status, 'uncertain');
     assert.equal(calls, 1);
+  });
+});
+
+test('a machine-killed worker leaves the session resumable', async () => {
+  await withState(async directory => {
+    const sessions = new ClaudeSessions(directory);
+    let calls = 0;
+    const killed = async input => {
+      calls++;
+      input.onNativeStarted();
+      throw Object.assign(new BridgeError('TIMEOUT', 'attempt timed out'), { worker: { ok: false, code: 'TIMEOUT',
+        execution: { cleanup: { status: 'terminated', survivors: [] } } } });
+    };
+    await assert.rejects(sessions.run(request(), killed), { code: 'TIMEOUT' });
+    assert.equal((await sessions.inspect(request())).status, 'resumable');
+    const resumed = await sessions.run(request({ fingerprint: 'after-kill' }), async input => {
+      assert.equal(input.session.resume, true);
+      return worker(input, 'resumed work');
+    });
+    assert.equal(resumed.ok, true);
+    assert.equal(calls, 1);
+  });
+  await withState(async directory => {
+    const sessions = new ClaudeSessions(directory);
+    const unconfirmed = async input => {
+      input.onNativeStarted();
+      throw Object.assign(new BridgeError('TIMEOUT', 'attempt timed out'), { worker: { ok: false, code: 'TIMEOUT',
+        execution: { cleanup: { status: 'unconfirmed' } } } });
+    };
+    await assert.rejects(sessions.run(request(), unconfirmed), { code: 'TIMEOUT' });
+    await assert.rejects(sessions.run(request({ fingerprint: 'retry' }), unconfirmed), { code: 'SESSION_RECOVERY_REQUIRED' });
+    assert.equal((await sessions.inspect(request())).status, 'uncertain');
   });
 });
 

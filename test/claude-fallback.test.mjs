@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ModelRelay, rateLimitDetails } from '../src/provider-relay.mjs';
@@ -69,6 +69,37 @@ for (const code of ['TIMEOUT', 'RATE_LIMITED']) test(`Claude ${code} continues w
       { role: 'system', content: `working directory: ${tmpdir()}` }, { role: 'user', content: 'Finish.' },
     ] }, options), { code: 'FALLBACK_SCOPE_CHANGED' });
   }, code);
+});
+
+test('a machine-killed Claude timeout keeps the session on Claude for the next turn', async () => {
+  await fixture(async ({ relay, calls, body, options, state }) => {
+    const original = relay.invoke;
+    let claudeAttempts = 0;
+    relay.invoke = async (route, prompt, settings) => {
+      calls.push({ route, prompt, options: settings });
+      if (route.provider !== 'claude') return original(route, prompt, settings);
+      claudeAttempts++;
+      if (claudeAttempts > 1) {
+        assert.equal(settings.session.resume, true);
+        return { ok: true, code: 'VERIFIED', runId: 'claude-run-2', sessionId: settings.session.id,
+          response: 'resumed Claude work', execution: { pid: 43, exitCode: 0 } };
+      }
+      settings.onNativeStarted?.();
+      await writeFile(path.join(state, 'partial.txt'), 'completed Claude step');
+      return { ok: false, code: 'TIMEOUT', runId: 'claude-run', logs: state,
+        execution: { pid: 42, exitCode: 1, cleanup: { status: 'terminated', survivors: [] } } };
+    };
+    const first = await relay.complete(body, options);
+    assert.equal(first.evidence.fallbackUsed, true);
+    assert.match(first.message.content, /gpt-6\.1-sol/);
+    const receipt = await relay.sessions.inspect({ sessionId: 'fallback-session', sessionType: 'subagent' });
+    assert.equal(receipt.status, 'resumable');
+    assert.deepEqual((await readdir(state)).filter(name => name.startsWith('fallback-')), [],
+      'no permanent handoff for a machine-killed worker');
+    const next = await relay.complete({ ...body, messages: [...body.messages, { role: 'user', content: 'Next step.' }] }, options);
+    assert.equal(claudeAttempts, 2);
+    assert.equal(next.message.content, 'resumed Claude work');
+  }, 'TIMEOUT');
 });
 
 test('fallback keeps host tool calls for the next ZCode turn', async () => {
