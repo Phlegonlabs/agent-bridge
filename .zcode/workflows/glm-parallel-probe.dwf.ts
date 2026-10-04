@@ -6,13 +6,13 @@ phase("並行驗證兩個 GLM Agent");
 
 const results = await Promise.all([
   world.run("node", [
-    "bin/bridge.mjs", "run", "--agent", "code_explorer",
+    "bin/bridge.mjs", "run", "--agent", "bridge-explorer",
     "--cwd", ".", "--task-file", "examples/probe-task.txt",
     "--expected-model", "account:zai-individual-coding-plan/GLM-5.3-Flash",
     "--timeout-ms", "60000",
   ], { timeoutMs: 90000 }),
   world.run("node", [
-    "bin/bridge.mjs", "run", "--agent", "reviewer",
+    "bin/bridge.mjs", "run", "--agent", "bridge-reviewer",
     "--cwd", ".", "--task-file", "examples/probe-task.txt",
     "--expected-model", "account:zai-individual-coding-plan/GLM-5.3",
     "--timeout-ms", "60000",

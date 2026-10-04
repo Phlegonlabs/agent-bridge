@@ -5,13 +5,13 @@ whenToUse: 在此專案驗證 ZCode 與 Cursor CLI 混合編排
 phase("並行驗證 GLM 與 Cursor");
 const results = await Promise.all([
   world.run("node", [
-    "bin/bridge.mjs", "run", "--agent", "code_explorer",
+    "bin/bridge.mjs", "run", "--agent", "bridge-explorer",
     "--cwd", ".", "--task-file", "examples/probe-task.txt",
     "--expected-model", "account:zai-individual-coding-plan/GLM-5.3-Flash",
     "--timeout-ms", "60000",
   ], { timeoutMs: 90000 }),
   world.run("node", [
-    "bin/bridge.mjs", "run", "--agent", "reviewer",
+    "bin/bridge.mjs", "run", "--agent", "bridge-reviewer",
     "--cwd", ".", "--task-file", "examples/probe-task.txt",
     "--expected-model", "account:zai-individual-coding-plan/GLM-5.3",
     "--timeout-ms", "120000",

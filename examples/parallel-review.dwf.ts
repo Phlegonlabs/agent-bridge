@@ -4,17 +4,17 @@ phase("並行執行兩個唯讀 Agent");
 
 const results = await Promise.all([
   world.run("node", [
-    "C:/Users/mps19/Documents/GitHub/agent-bridge/bin/bridge.mjs",
-    "run", "--agent", "code_explorer",
-    "--cwd", "C:/Users/mps19/Documents/GitHub/agent-bridge",
-    "--task-file", "C:/Users/mps19/Documents/GitHub/agent-bridge/examples/probe-task.txt",
+    "C:/path/to/agent-bridge/bin/bridge.mjs",
+    "run", "--agent", "bridge-explorer",
+    "--cwd", "C:/path/to/agent-bridge",
+    "--task-file", "C:/path/to/agent-bridge/examples/probe-task.txt",
     "--timeout-ms", "60000",
   ], { timeoutMs: 90000 }),
   world.run("node", [
-    "C:/Users/mps19/Documents/GitHub/agent-bridge/bin/bridge.mjs",
-    "run", "--agent", "reviewer",
-    "--cwd", "C:/Users/mps19/Documents/GitHub/agent-bridge",
-    "--task-file", "C:/Users/mps19/Documents/GitHub/agent-bridge/examples/probe-task.txt",
+    "C:/path/to/agent-bridge/bin/bridge.mjs",
+    "run", "--agent", "bridge-reviewer",
+    "--cwd", "C:/path/to/agent-bridge",
+    "--task-file", "C:/path/to/agent-bridge/examples/probe-task.txt",
     "--timeout-ms", "60000",
   ], { timeoutMs: 90000 }),
 ]);
