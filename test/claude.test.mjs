@@ -128,6 +128,7 @@ test('runClaude passes normalized policy, effort, and native session arguments t
     return { exitCode: 0, reason: null, cleanup: { status: 'terminated' } };
   };
   const result = await runClaude({ cwd: process.cwd(), task: 'Inspect the policy arguments.', model,
+    claudeBin: process.execPath,
     effort: 'xhigh', session: { id: sessionId, resume: true },
     execution: { mode: 'workspace-write', writeScope: './**', tools: [
       'Read', 'Glob', 'Grep', 'Edit(./**)', 'Write(./**)', 'Bash(npm *)', 'Bash(git status*)'
@@ -173,6 +174,7 @@ test('runClaude tracks native spawn state through onSpawn and pre-process errors
   const spawnError = new Error('native launch failed');
   await assert.rejects(runClaude({
     cwd: process.cwd(), task: 'Inspect spawn evidence.', model,
+    claudeBin: process.execPath,
     onSpawn: details => spawnCalls.push(details),
     runProcessImpl: async options => {
       options.onSpawn({ pid: 4219, startedAt: 123, command: 'claude', cwd: process.cwd() });
@@ -187,6 +189,7 @@ test('runClaude tracks native spawn state through onSpawn and pre-process errors
 
   const result = await runClaude({
     cwd: process.cwd(), task: 'Preflight fails before spawn.', model,
+    claudeBin: process.execPath,
     runProcessImpl: async () => ({ exitCode: null, reason: 'spawn_failed', cleanup: null }),
   });
   assert.equal(result.ok, false);
