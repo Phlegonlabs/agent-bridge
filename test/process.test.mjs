@@ -4,6 +4,15 @@ import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { runProcess } from '../src/process.mjs';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+async function assertStopped(pid) {
+  if (process.platform === 'win32') { assert.throws(() => process.kill(pid, 0)); return; }
+  const result = await promisify(execFile)('ps', ['-p', String(pid), '-o', 'stat='], { timeout: 2000 })
+    .catch(error => { if (error.code === 1 && !error.stdout.trim()) return { stdout: '' }; throw error; });
+  assert.ok(!result.stdout.trim() || result.stdout.trim().startsWith('Z'), `Process ${pid} is still running.`);
+}
 
 async function options(script, extra = {}) {
   const root = path.resolve('.bridge', 'tests', randomUUID()); await mkdir(root, { recursive: true });
@@ -50,7 +59,8 @@ test('deadline terminates a running child process tree', async () => {
   const result = await runProcess(await options(script, { timeoutMs: 500, onLine: x => { descendant = Number(x); } }));
   assert.equal(result.reason, 'timeout');
   assert.equal(result.cleanup.status, process.platform === 'win32' ? 'terminated' : 'terminated_process_group');
-  assert.ok(descendant); assert.throws(() => process.kill(descendant, 0));
+  assert.ok(descendant); await assertStopped(descendant);
+  assert.deepEqual(result.cleanup.survivors, []);
 });
 
 test('a failed executable returns a bounded failure', async () => {

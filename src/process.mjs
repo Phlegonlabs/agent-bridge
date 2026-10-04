@@ -48,7 +48,22 @@ export async function terminateOwnedTree(child, startedAt) {
     return { status: survivors.length ? 'unconfirmed' : 'terminated', pid: child.pid, tree, survivors };
   }
   process.kill(-child.pid, 'SIGKILL');
-  return { status: 'terminated_process_group', pid: child.pid };
+  const deadline = Date.now() + 5000;
+  let tree, survivors;
+  do {
+    const { stdout } = await execute('ps', ['-A', '-o', 'pid=,pgid=,stat='],
+      { timeout: 2000, maxBuffer: 1048576 });
+    tree = stdout.trim().split('\n').map(line => {
+      const [pid, group, state] = line.trim().split(/\s+/);
+      return { pid: Number(pid), group: Number(group), state };
+    }).filter(entry => entry.group === child.pid);
+    // A zombie has exited and cannot execute code. Its PID may remain until
+    // its parent (or init) reaps it; kill(pid, 0) alone cannot verify liveness.
+    survivors = tree.filter(entry => !entry.state?.startsWith('Z'));
+    if (!survivors.length) break;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  } while (Date.now() < deadline);
+  return { status: survivors.length ? 'unconfirmed' : 'terminated_process_group', pid: child.pid, tree, survivors };
 }
 
 // The pipe is always drained. Only bounded line fragments and sanitized audit facts stay in RAM.
