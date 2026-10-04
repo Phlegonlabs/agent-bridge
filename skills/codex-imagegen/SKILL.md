@@ -10,10 +10,10 @@ Use this skill when the user wants to generate images through Codex from ZCode.
 This uses Codex's built-in `image_gen.imagegen` tool and included Codex usage.
 
 1. Write the user's image description to a new UTF-8 text file in the current workspace. Preserve requested subjects, style, layout, and text. Use a unique filename; keep existing files.
-2. Run this command through ZCode's Bash tool. Replace the two paths with the actual workspace and prompt file. Allow up to six minutes for the command, and wait for it to finish. Do not rerun while it is still active.
+2. Run this command through ZCode's Bash tool. Replace `BRIDGE_DIRECTORY` with the installed agent-bridge checkout, and replace the workspace and prompt file paths. Use the local Node.js executable. Allow up to six minutes for the command, and wait for it to finish. Do not rerun while it is still active.
 
 ```bash
-"C:/Program Files/nodejs/node.exe" "C:/Users/mps19/Documents/GitHub/agent-bridge/bin/codex-image.mjs" --cwd "WORKSPACE" --prompt-file "PROMPT_FILE"
+node "BRIDGE_DIRECTORY/bin/codex-image.mjs" --cwd "WORKSPACE" --prompt-file "PROMPT_FILE"
 ```
 
 3. Parse the JSON result. Only `ok: true` confirms completion. The verified PNG is at `image.path` under the workspace's `generated-images` directory. Display it using `![Generated image](ABSOLUTE_IMAGE_PATH)` and give its saved path. Keep the image when adding it to the project.

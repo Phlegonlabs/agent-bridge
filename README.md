@@ -1,80 +1,199 @@
 # Agent Bridge
 
-Two ZCode providers share the local bridge. **Agent Bridge** (`workflow-bridge`) exposes eight Codex models and eleven Cursor model families. Its reasoning selector forwards the chosen strength to Codex or selects Cursor's exact native variant. **Claude Bridge** (`claude-bridge`) exposes Opus and Sonnet as task delegates, with scoped file edits, named shell commands and native session continuity. See [native provider setup](docs/native-provider.md).
+[繁體中文](README.zh-TW.md)
 
-Run existing ZCode agent profiles from the official app's Dynamic Workflow command steps. Keep the official installation and Computer Use intact.
+Connect ZCode to your installed Codex, Cursor and Claude Code CLIs. Each CLI keeps its own account login. GLM uses ZCode's native account connection and optional profile workflows.
 
-Cursor Agent CLI is also available as a worker with `--provider cursor --model composer-2.5`. It uses its own Cursor account and native ask mode. See [Cursor setup and usage](docs/cursor.md); the combined saved workflow is `glm-cursor-probe`.
+This is a local bridge, not a hosted model service. It listens on `127.0.0.1`, verifies native model/session evidence, and keeps credentials and execution logs under ignored `.bridge/` state. It does not install the upstream apps or provide model subscriptions.
 
-Cursor Agent CLI and Claude Code CLI adapters also work through `bin/bridge.mjs` and saved workflows. Claude runs the task directly with its own CLI tools. Writable execution and session continuity are configured on the native provider routes; standalone CLI workers remain read-only by default. The Claude runtime resolver requires the native binary because Node cannot spawn npm `.cmd` shims without a shell.
+## Choose a connection
 
-Claude delegate routes verify the final run and switch to GPT-6.1-Sol `xhigh` on timeout or rate/usage limits. GPT continues through ZCode's host tools and inspects partial work first; the failed Claude turn is not replayed. Fallback-enabled turns buffer text until completion. They reject forced outer tool calls and structured response formats. A writable task is never rerun merely to correct its answer format.
+| Connection | How a task runs | Account | Bridge provider in ZCode |
+| --- | --- | --- | --- |
+| Codex | Returns text or validated tool calls; ZCode runs host tools | Existing Codex login | Agent Bridge |
+| Cursor | Native ask mode returns text or validated tool calls; ZCode runs host tools | Existing Cursor login | Agent Bridge |
+| Claude Code | Executes a delegated task with its own tools; can edit the active workspace | Existing Claude Code login | Claude Bridge |
+| GLM | ZCode native models; optional plan-mode profile workers | ZCode desktop connection, plus isolated CLI login for profile workflows | ZCode native provider |
 
-The earlier CLI-worker workflow `model-bridge` remains available. It supports routing within its saved worker/model allowlist, a parallel limit of 14, and configurable fallback that is off by default. See [saved execution settings](docs/workflow-presets.md).
+The bridge targets Windows, macOS and Linux. See [verification status](docs/compatibility.md) for the distinction between offline tests, installation checks and authenticated requests. Model access depends on your account, installed CLI and selected model.
 
-Status: local prototype. GLM-5.3-Flash, GLM-5.3 and Cursor Composer 2.5 ran together successfully through the official CLI's native Dynamic Workflow engine. The shipped preset is now Cursor-only. See [compatibility evidence](docs/compatibility.md) for verification of the current extension.
+## 1. Install the prerequisites
 
-The bridge must verify the dispatched agent and model from runtime evidence. A model's statement that it delegated work is not evidence. Unsupported profile settings must fail explicitly rather than silently losing tool restrictions.
+Install Git, Node.js **24 or later**, [ZCode](https://zcode.z.ai/en/docs/install), and whichever CLIs you want to use. Open ZCode once and complete its first-launch setup so its provider configuration exists. Personal agent profiles are only required for GLM profile workflows.
 
-The first milestone covers Windows, profile discovery, bounded headless runs, structured results, and a two-model plan-mode workflow. The adapter currently accepts profiles with `permissionMode: plan`, explicit read tools, and no agent memory. It rejects writable profiles.
-
-This repository does not contain credentials or copies of personal agent definitions.
-
-## Setup
-
-Requires Node.js 24+, the official Windows ZCode installation, and existing Markdown agents in `%USERPROFILE%\.zcode\agents`.
-
-```powershell
+```sh
+git clone https://github.com/Phlegonlabs/agent-bridge.git
+cd agent-bridge
 npm ci --ignore-scripts
-node bin/bridge.mjs doctor
+node --version
+```
+
+Use the official installers below. Open a new terminal after installation if a command is not on PATH. The bridge does not run these installers for you.
+
+| CLI | Windows PowerShell | macOS / Linux |
+| --- | --- | --- |
+| [Claude Code](https://code.claude.com/docs/en/setup) | `irm https://claude.ai/install.ps1 \| iex` | `curl -fsSL https://claude.ai/install.sh \| bash` |
+| [Codex](https://github.com/openai/codex/blob/main/README.md) | `irm https://chatgpt.com/codex/install.ps1 \| iex` | `curl -fsSL https://chatgpt.com/codex/install.sh \| sh` |
+| [Cursor CLI](https://cursor.com/docs/cli/installation) | `irm 'https://cursor.com/install?win32=true' \| iex` | `curl https://cursor.com/install -fsS \| bash` |
+
+The backslash before each pipe is Markdown table escaping; copied commands use a normal `|`. Claude workspace shell tools on Windows require Git for Windows so the native CLI provides Bash. Use the native Claude/Codex executable rather than an npm `.cmd` launcher. Cursor's command is `agent`, not the editor's `cursor` launcher.
+
+Check each selected CLI with `claude --version`, `codex --version` or `agent --version`. The optional `scripts/setup-cursor.ps1` preserves the older verified Windows x64 package under `.bridge/tools`; it is not the cross-platform installation path.
+
+## 2. Sign in and inspect models
+
+Run the commands for each selected provider:
+
+```sh
+node bin/bridge.mjs login --provider claude
+node bin/bridge.mjs login --provider codex
+node bin/bridge.mjs login --provider cursor
+node bin/bridge.mjs doctor --provider claude
+node bin/bridge.mjs doctor --provider codex
+node bin/bridge.mjs doctor --provider cursor
+node bin/bridge.mjs models --provider claude
+node bin/bridge.mjs models --provider codex
+node bin/bridge.mjs models --provider cursor
+```
+
+Login invokes that provider's official CLI and allows about five minutes for browser authorization. If you are already signed in, skip login and run doctor. Raw login output stays in private logs; the public result contains status, not account credentials.
+
+Doctor distinguishes `installed`, `authenticated`, `modelSelectable` and `requestVerified`. A successful preflight is **not** a successful model request. Codex reads its local model cache; if missing, open `codex` once after login to let the official CLI populate it. Cursor reads its native catalog. Claude lists adapter candidates, not your account's entitlement list; you may select another full `claude-...` ID and then verify it with a live request.
+
+`doctor --provider all` checks all four providers. A provider you have not installed can make that aggregate command exit 1; use individual checks for a partial installation.
+
+## 3. Configure the bridge
+
+For the guided setup, use an interactive terminal:
+
+```sh
+node bin/bridge.mjs setup
+```
+
+The wizard asks for providers, offers login when needed, shows model choices, asks for exact model IDs and a fallback choice, then displays the configuration before saving and registering it in ZCode. You can configure one provider without installing the others.
+
+Claude defaults to `workspace-write`: Read/Glob/Grep, Edit/Write within `./**`, and the displayed shell command patterns. Those patterns include language/build tools and local Git commands. This is a CLI permission policy, not an operating-system sandbox. Review the printed rules; worker assignments still prohibit publishing, deletion, background services and permission bypass. Use `--write-mode read-only` for review-only delegates.
+
+For a repeatable setup, specify all selections explicitly. Replace these example IDs with IDs from your catalogs:
+
+```sh
+node bin/bridge.mjs setup --providers codex,claude --models codex:gpt-6.1-sol,claude:claude-opus-5-5 --fallback off --dry-run
+node bin/bridge.mjs setup --providers codex,claude --models codex:gpt-6.1-sol,claude:claude-opus-5-5 --fallback off
+node bin/bridge.mjs setup --providers cursor --models cursor:composer-2.5 --fallback off
+```
+
+These are alternative configurations. A later setup replaces the bridge's selected route set after backing it up; include all providers/models you want to keep. It preserves unrelated ZCode providers and manual overrides. Repeating identical setup does not duplicate providers or rewrite unchanged settings.
+
+`--dry-run` checks and prints the proposed settings without saving or registering them. `--port 32147` changes the local port. `--config FILE` selects an explicit destination; use the same option when starting or registering that configuration.
+
+Settings are resolved in this order:
+
+1. Explicit `--config FILE`.
+2. `.bridge/config/native-provider.json`, created by setup.
+3. `config/native-provider.json`, the existing legacy configuration.
+
+Setup does not rewrite the tracked legacy configuration or migrate existing sessions. It backs up changed local settings and changed ZCode registration files under `.bridge/`. Keep backups private.
+
+### Optional Claude fallback
+
+Choose `off` or a selected Codex model ID. The target must exist in the generated route set and support the requested reasoning effort:
+
+```sh
+node bin/bridge.mjs setup --providers codex,claude --models codex:gpt-6.1-sol,claude:claude-opus-5-5 --fallback gpt-6.1-sol --fallback-effort xhigh
+```
+
+Fallback handles Claude timeout and rate/usage limits after worker cleanup. Codex continues through ZCode's host tools, inspects partial work and preserves the assignment's file/command restrictions. It does not replay the failed Claude turn. Permission denial, cancellation, model mismatch, protocol failure and unconfirmed cleanup do not trigger fallback. Fallback-enabled Claude turns buffer their text until completion. Other provider routes keep their selected model.
+
+## 4. Start the provider and connect ZCode
+
+Keep this foreground process running in its terminal:
+
+```sh
+node bin/provider.mjs
+```
+
+For a custom configuration, use `node bin/provider.mjs --config FILE`. Success prints `ready: true` and the local address. An authenticated bridge with the same configuration is reused. A different service or configuration on that port produces `PORT_IN_USE`; inspect the existing process before restarting it. The bridge does not choose another port or kill an existing service automatically.
+
+In ZCode's model selector, choose **Agent Bridge** for Codex/Cursor or **Claude Bridge** for Claude, then select a configured model and reasoning level. Registration uses OpenAI Chat Completions at `http://127.0.0.1:32147/v1`; the local token is handled by setup. You do not paste your CLI account token into ZCode.
+
+Send a first task such as: **Reply BRIDGE_PROBE_OK without using tools or changing files.** Confirm the reply. For Claude, open a project workspace; writable delegation also requires ZCode's session ID and working-directory context.
+
+`http://127.0.0.1:32147/health` only proves service readiness. Authenticated `/status` and `/v1/models` describe queues and routes. Neither proves account/model access. `/v1/chat/completions` handles model requests. Chat requests accept text/function schemas; image input is not supported here.
+
+For a separate native CLI request check:
+
+```sh
+node bin/bridge.mjs doctor --provider codex --live --model gpt-6.1-sol --cwd .
+node bin/bridge.mjs doctor --provider claude --live --model claude-opus-5-5 --cwd .
+node bin/bridge.mjs doctor --provider cursor --live --model composer-2.5 --cwd . --trust-workspace
+```
+
+`requestVerified: true` confirms the exact marker and native completion/model evidence for that CLI. It does not prove a ZCode UI round trip. To inspect UI requests, keep `.bridge/provider/requests` local and check the request's verified result; do not upload raw logs.
+
+Stop the foreground process with Ctrl+C. `node scripts/stop-provider.mjs` requests graceful shutdown of the configured provider and cancels active requests. Its legacy Windows scheduled-task installer remains available for existing users; cross-platform startup-at-login is not included in this version. A scheduled task can restart a stopped Windows provider.
+
+## GLM: native connection and profile workflows
+
+For normal GLM chat, follow [ZCode Connect Models](https://zcode.z.ai/en/docs/configuration) and select a native GLM model. No Agent Bridge provider registration is needed.
+
+For optional CLI profile workflows, the desktop login is not assumed to authenticate the isolated CLI account:
+
+```sh
+node bin/bridge.mjs login --provider zcode
+node scripts/install-example-agents.mjs
 node bin/bridge.mjs profiles
-node bin/bridge.mjs login
+node bin/bridge.mjs models --provider zcode
+node bin/bridge.mjs doctor --provider zcode
+node bin/bridge.mjs run --provider zcode --agent bridge-explorer --cwd . --task-file examples/probe-task.txt
 ```
 
-`doctor` checks paths and profile metadata. It does not prove account or model access. `login` starts the official Z.AI browser authorization and waits up to five minutes. Complete it with the account that has GLM Coding Plan. A fallback URL is printed if the browser does not appear. Retry `login` if that link expires.
+The example installer creates `bridge-explorer.md` and `bridge-reviewer.md` under your user `.zcode/agents` directory. It refuses to overwrite either existing profile. Review their provider-qualified model IDs for your account before running. The samples are generic; no personal profiles are shipped.
 
-The official CLI stores this new login under `.bridge/account/.zcode/v2`. The bridge sets the account and provider-config paths only for its child processes. It does not copy desktop tokens or change desktop model settings. Agents continue to load from their existing user directory. Never upload `.bridge`: it contains credentials, raw model events, prompts, and execution logs. Windows directory access uses the local account's inherited permissions.
+Profiles must use `permissionMode: plan`, explicit read tools and no agent memory. Writable or shadowed profiles are rejected. `--expected-model PROVIDER/MODEL` asserts identity; it does not override the profile model. Success requires `ok: true`, the expected actual model and native child-session evidence, not just CLI exit 0.
 
-### Keep the provider running
+Open this checkout as a ZCode project. Ask it to use `CreateWorkflow` with `saved.name: glm-parallel-probe` and `saved.scope: project`. `glm-cursor-probe` adds the explicitly trusted Cursor probe. Review model IDs, trust and deadlines in the saved files first. These workflows require the sample profile names; another profile name must be changed in the workflow commands.
 
-The native provider (`bin/provider.mjs`, port 32147) is a plain Node process; it does not survive a reboot on its own. Register a scheduled task that starts it at logon and health-checks it every 5 minutes:
+## Standalone tasks and saved workflows
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/install-provider-task.ps1
+```sh
+node bin/bridge.mjs run --provider claude --model claude-opus-5-5 --cwd . --task-file examples/probe-task.txt
+node bin/bridge.mjs run --provider codex --model gpt-6.1-sol --cwd . --task-file examples/probe-task.txt
+node bin/bridge.mjs run --provider cursor --model composer-2.5 --cwd . --task-file examples/probe-task.txt --trust-workspace
+node bin/bridge.mjs presets
 ```
 
-`scripts/start-provider.ps1` is idempotent, so repeated runs only restart a dead provider. To remove the task: `Unregister-ScheduledTask -TaskName ZCodeWorkflowBridgeProvider -Confirm:$false`. To stop the provider for this session only: `node scripts/stop-provider.mjs`.
+Standalone Claude stays read-only; writable execution and persistent session continuity belong to the configured native delegate routes. Cursor trust accepts only the supplied workspace; ask mode does not enable writable workers. External workers do not inherit ZCode desktop Computer Use.
 
-## Run one agent
+`model-bridge` is the saved batch workflow. Its tracked preset is an example with specific Cursor/Claude models, not a catalog for every account. Copy and edit the preset for your account before use, then pass `--config FILE` to CLI workflow/presets commands. Saved desktop workflow commands must use that same file if you customize the preset. Codex is available through native provider routes and standalone tasks, not the existing batch preset adapter.
 
-```powershell
-node bin/bridge.mjs run --agent code_explorer --cwd . --task-file examples/probe-task.txt --expected-model account:zai-individual-coding-plan/GLM-5.3-Flash
-```
+The batch workflow accepts explicit independent `{id, worker, task}` jobs or uses ZCode's native planning actor. Run dependent stages as later batches. Its maximum is 14 active jobs, not a request to create 14 jobs. Preset fallback is separate from Claude native-provider fallback and remains off in the example. See [workflow settings](docs/workflow-presets.md) for deadlines, candidate rules and full-result handling.
 
-Choose `--agent` from `profiles`. The profile determines its model, reasoning level, prompt, and tools through ZCode's native Agent runtime. `--expected-model` asserts the model; it does not override it. A different model requires another existing profile configured for that model.
+## Image generation, sessions and maintenance
 
-The stock CLI exposes neither `--agent` nor `--model`. This adapter asks its parent model to call the native Agent tool once, then verifies the dispatch, child session, actual model request, and child result from runtime events. This adds a parent model request and can fail if it does not follow the dispatch contract. Parent prose and a zero CLI exit code are insufficient for success.
+- **Codex images:** write a UTF-8 prompt file, then run `node bin/codex-image.mjs --cwd . --prompt-file PROMPT_FILE`. This uses native Codex image generation and its existing login, with no paid Image API fallback. A verified PNG is copied to a new `generated-images/codex-UUID/image.png` directory. The supplied [ZCode skill](skills/codex-imagegen/SKILL.md) needs your checkout path before installation; reference-image editing is not supported by this entry.
+- **Claude sessions:** completed turns resume the native session; duplicate completed requests use saved results. Workspace/policy changes and uncertain interrupted writes are rejected. Inspect with `node scripts/claude-session-recovery.mjs .bridge/provider/sessions inspect --session-id ID --session-type TYPE`. Recovery requires checking native history, files and process state; see [recovery instructions](docs/native-provider.md).
+- **Updates:** stop your provider after checking active work, pull the repo, run `npm ci --ignore-scripts`, review any catalog changes, then repeat setup or run `node scripts/register-provider.mjs --update`. Use `--config FILE` for custom registration. Restart deliberately; current sessions are not replayed or migrated automatically.
+- **Limits:** global 14, Codex 4, Claude 4, Cursor 12; attempt budget seven minutes and request budget fifteen minutes. These local limits do not account for other apps using your subscriptions. Unsupported reasoning strengths fail explicitly.
+- **Private state:** never publish `.bridge`, `.env` files, CLI credentials, personal profiles or raw transcripts. Windows uses inherited local account permissions. Keep the provider on loopback.
 
-The command prints one JSON result. Exit code `0` means `ok: true` with verified agent/model evidence. Failures exit `1`. Examples include `PROVIDER_UNAVAILABLE`, `MODEL_MISMATCH`, `WRONG_DISPATCH`, and `TIMEOUT`. Logs are stored under this bridge repository's `.bridge/runs`, even when the target workspace differs.
+## Troubleshooting
 
-## Dynamic Workflow
+| Result | Next step |
+| --- | --- |
+| `*_NOT_INSTALLED` / `*_RUNTIME_INVALID` | Use the official native installer, reopen the terminal, or set the executable/bundle path below. |
+| `AUTH_REQUIRED` | Run login for that exact provider, then doctor. |
+| `ZCODE_CONFIG_REQUIRED` | Open ZCode and finish first launch before setup registration. |
+| `CODEX_MODEL_CATALOG_UNAVAILABLE` | Open the official Codex CLI after login to populate its local cache. |
+| `MODEL_UNAVAILABLE` / reasoning error | Re-list models, choose an exact ID and a declared reasoning strength. |
+| `PORT_IN_USE` | Inspect the listener; reuse or deliberately stop the correct provider before restarting. |
+| `AGENT_NOT_FOUND` / `PROFILE_NOT_READ_ONLY` | Install/review generic plan-mode profiles, or use an existing compatible profile explicitly. |
+| Session uncertainty / denied tools | Inspect partial work and native evidence. Do not replay writes or bypass permissions. |
+| CLI works but ZCode cannot connect | Confirm the provider is running, select its registered provider/model, and bypass proxies for `localhost,127.0.0.1`. |
 
-Open this repository as the project in official ZCode. A project workflow named `glm-parallel-probe` is provided under `.zcode/workflows`. Ask ZCode:
+Optional environment overrides: `ZCODE_BRIDGE_CLI` (official `zcode.cjs`), `CLAUDE_BRIDGE_BIN` and `CODEX_BRIDGE_BIN` (native executable), `CURSOR_BRIDGE_BIN` (official `agent` executable), `CURSOR_BRIDGE_DIR` (official runtime package directory) and `CODEX_HOME` (existing Codex state). Set them in the terminal that runs setup/provider; the bridge does not rewrite your shell profile. Linux AppImage users can extract the app and point `ZCODE_BRIDGE_CLI` at its `resources/glm/zcode.cjs`.
 
-> 執行本專案已保存的 glm-parallel-probe 工作流，使用 CreateWorkflow 的 saved 來源，scope 為 project。完成後回報兩個 Agent 的 actualModel 和結果。
+## Development and evidence
 
-The workflow starts `code_explorer` and `reviewer` through `Promise.all`, checks both process exits, and reports their verified models. It uses paths relative to this repository. [The standalone example](examples/parallel-review.dwf.ts) shows absolute paths for a workflow in a different project.
+Run `npm test` for offline checks. GitHub Actions runs Node 24 on Windows, macOS and Linux without account credentials. Authenticated requests are recorded separately in [compatibility notes](docs/compatibility.md). [Document index](docs/DOCUMENTS.md) links the detailed guides and historical implementation records.
 
-To assign an agent to a stage, put its name in that stage's `world.run` arguments. To run stages sequentially, await the first stage before starting the second. The native Sub Agent Model selector controls native workflow actors; this bridge uses the selected custom profiles instead. It does not edit that selector.
-
-The saved workflow compiled and completed through the official bundled CLI's native Dynamic Workflow engine. Launching it from the desktop UI has not been tested. External CLI workers do not inherit desktop Computer Use. The official app remains installed and retains its own capabilities.
-
-## Limits and verification
-
-- The bridge requests plan mode and accepts plan-mode profiles. This is not an operating-system sandbox. Existing native plugins, hooks, skills, and runtime state remain controlled by ZCode.
-- Keep each command's workflow timeout longer than the bridge timeout plus process cleanup time. The example uses 60 seconds plus a 30-second allowance.
-- Cancellation and deadlines terminate the owned process tree and check the observed Windows process identities. A cleanup result of `unconfirmed` requires inspection; it is never reported as successful work. Detached daemons are unsupported.
-- Project agents that shadow a selected user agent are rejected. Unsupported frontmatter fields also fail explicitly.
-- Changing a ZCode profile during a run invalidates its result. Claude delegate routes support scoped writes and model changes between completed turns; changes during a running turn are rejected.
-
-Run `npm test` for the offline suite. Live GLM, Cursor and native Dynamic Workflow evidence is tracked in [the compatibility notes](docs/compatibility.md).
+This repo is distributed as a Git checkout. npm publication is disabled.

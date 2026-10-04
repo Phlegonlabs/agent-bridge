@@ -1,5 +1,24 @@
 # Compatibility evidence
 
+## Public setup verification — 2026-10-04
+
+The public CLI now supports per-provider setup/login/doctor/models, local configuration precedence, one registration flow and foreground startup with port/identity checks. Runtime discovery covers Windows, macOS and Linux. The model IDs and reasoning levels in the tracked legacy configuration are examples from the tested environment; setup uses the selected local catalogs instead.
+
+| Check | Evidence and limit |
+| --- | --- |
+| Windows offline suite | 165 tests passed after the setup and native Claude notification changes. |
+| Fresh setup | Isolated fixture with no personal profiles: selected Codex/Claude routes, both registrations, unrelated provider preservation, repeated setup, backups and cancellation passed. This uses simulated catalogs, not new account logins. |
+| Windows Claude request | Native `claude-opus-5-5` returned `BRIDGE_PROBE_OK`; model/session/result evidence passed. A harmless `system/ui_invalidate` notice initially failed the old audit; the corrected audit passed the real retry and regression checks. |
+| Windows Codex request | Native `gpt-6.1-sol` returned `BRIDGE_PROBE_OK` with rollout model and completion evidence. |
+| Windows Cursor request | Native `composer-2.5` returned `BRIDGE_PROBE_OK` with init/result evidence. |
+| Current GLM workflow | Not revalidated live: the current account's five personal profiles do not satisfy the legacy read-only adapter, and the old `code_explorer` profile no longer exists. Generic `bridge-explorer` / `bridge-reviewer` samples now provide a non-overwriting setup path. Earlier successful trials below remain historical evidence. |
+| macOS / Linux | Runtime path fixtures pass locally. The Node 24 GitHub Actions matrix runs offline tests on all three platforms; authenticated model requests and desktop UI round trips on macOS/Linux remain unverified. |
+| ZCode desktop round trip | Not revalidated during this change. A native CLI marker does not certify the UI integration. The README includes the manual first-request check. |
+
+Private command logs and session receipts stay under `.bridge/` and are excluded from publication. Existing account settings, provider routing and sessions were not migrated or restarted for these checks.
+
+## Earlier Windows trials
+
 Checked on Windows on 2026-09-22.
 
 | Item | Observation |

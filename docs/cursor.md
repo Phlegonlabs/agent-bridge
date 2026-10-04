@@ -4,7 +4,7 @@ Cursor Agent CLI is a second execution provider. ZCode Dynamic Workflow invokes 
 
 ## Setup
 
-The bridge uses the official Windows x64 CLI package `2026.09.18-9a7762b`. It is stored under ignored `.bridge/tools`, with its bundled Node runtime. It does not use the editor's `cursor` launcher or a generic `agent` from PATH.
+New installations use the official Cursor CLI installer for their platform and the `agent` executable. `CURSOR_BRIDGE_BIN` selects its explicit executable path. An existing pinned Windows x64 package `2026.09.18-9a7762b` under ignored `.bridge/tools` remains supported and is preferred when present; `CURSOR_BRIDGE_DIR` selects another official runtime package directory. Neither path uses the editor's `cursor` launcher. The commands below describe the optional pinned Windows installation; see the README for the cross-platform setup.
 
 ```powershell
 pwsh -NoProfile -NonInteractive -File scripts/setup-cursor.ps1
@@ -44,8 +44,8 @@ The saved project workflow `glm-cursor-probe` runs:
 
 | Worker | Model |
 | --- | --- |
-| ZCode `code_explorer` | GLM-5.3-Flash |
-| ZCode `reviewer` | GLM-5.3 |
+| ZCode `bridge-explorer` | GLM-5.3-Flash |
+| ZCode `bridge-reviewer` | GLM-5.3 |
 | Cursor | Composer 2.5 |
 
 In the official ZCode project, ask it to run the saved workflow with `CreateWorkflow`, `saved.name: glm-cursor-probe`, and `saved.scope: project`. The workflow checks all three exits and results before reporting success. See `compatibility.md` for current live evidence.

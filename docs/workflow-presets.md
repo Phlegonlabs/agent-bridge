@@ -1,5 +1,7 @@
 # Saved execution settings and auto route
 
+The tracked preset is an example, separate from setup's native provider configuration. Review model IDs against your account catalog before running it. To customize it, copy the preset to a new file, edit the worker/model choices, and pass `--config FILE` to both `presets` and `workflow`. A saved desktop workflow must pass that same file to both commands. The existing batch adapter supports ZCode, Cursor and Claude; Codex uses native provider routes or standalone tasks.
+
 Select the project workflow `model-bridge` in official ZCode. Supply the task for the current stage. The saved preset chooses allowed worker models, the parallel limit, deadlines and fallback policy. You do not need to select every model again.
 
 This is a saved workflow entry, not a new item in ZCode's model dropdown. The current upstream saved-argument form accepts string, number, boolean and JSON fields; it has no custom enum/dropdown field. The official installation is unchanged.
@@ -16,7 +18,7 @@ This is a saved workflow entry, not a new item in ZCode's model dropdown. The cu
 | `claude` | Claude Code CLI, single-task delegation | Claude Opus 5.5 |
 | `claude-sonnet` | Claude Code CLI, single-task delegation | Claude Sonnet 5.5 |
 
-Claude workers receive one self-contained task per job and run through the native Claude Code CLI with the usual exact-dispatch audit. They are delegates, not relay models — Claude must not be exposed as a provider route (see [native provider](native-provider.md)).
+Claude workers receive one self-contained task per job and run through the native Claude Code CLI with model and session audits. Native provider routes also support Claude, but must use `mode: "delegate"`; Claude executes the task itself rather than acting as a text/function-call relay. See [native provider](native-provider.md).
 
 Every route is verified from the model name Cursor reports at runtime. Cursor's catalog label and that runtime name can differ, so verification requires the catalog label's tokens plus any tier keyword spelled out in the route id. Cursor adding a token (`Grok 4.7  High` reported as `Grok 4.7 256K High`) passes; a missing family or tier token still fails. See [native provider](native-provider.md) for the exact rule.
 

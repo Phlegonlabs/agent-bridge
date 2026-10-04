@@ -2,9 +2,11 @@
 
 Select **Agent Bridge** for Codex or Cursor, or **Claude Bridge** for a task executed by Claude Code CLI. The connection is OpenAI Chat Completions at `http://127.0.0.1:32147/v1`. Its local token is separate from the CLI account credentials.
 
-`config/native-provider.json` exposes eight Codex models, eleven Cursor model families and two Claude models. Each model advertises only its configured reasoning levels. Models without effort control expose `default`. Codex receives `model_reasoning_effort`; Cursor selects an exact native model variant, preserving the fast qualifier. Unsupported strengths fail instead of selecting another model. The catalogs describe this machine's installed CLIs and accounts, not guaranteed entitlement to every model.
+Use `node bin/bridge.mjs setup` for a new installation. It selects models from your local environment and writes `.bridge/config/native-provider.json`. Explicit `--config FILE` takes priority, followed by that local file, then the legacy tracked `config/native-provider.json` (four Codex models, eleven Cursor families and two Claude models). The legacy catalog is a tested example, not an entitlement list.
 
-Run `node scripts/register-provider.mjs --update` after changing routes. It backs up the native provider file and reconciles only Agent Bridge and Claude Bridge, preserving other providers and manual model overrides. Start with `pwsh -NoProfile -NonInteractive -File scripts/start-provider.ps1`; stop with `node scripts/stop-provider.mjs`. Restart after changing routes. The optional scheduled task is documented in the README.
+Each model advertises only its configured reasoning levels. Models without effort control expose `default`. Codex receives `model_reasoning_effort`; Cursor selects an exact native model variant, preserving the fast qualifier. Unsupported strengths fail instead of selecting another model. See the README for installation, login and first-request verification on each platform.
+
+Setup registers both provider groups using the same reconciliation as updates. Run `node scripts/register-provider.mjs --update` after manually changing routes; custom configurations also need `--config FILE`. It backs up changed native provider files and preserves other providers and manual model overrides. Start in the foreground with `node bin/provider.mjs`; stop with Ctrl+C or `node scripts/stop-provider.mjs`. Restart deliberately after changing routes. Legacy Windows launcher and scheduled-task scripts remain available, but the new public setup does not install a background service.
 
 ## Claude task execution
 
