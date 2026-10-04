@@ -28,7 +28,7 @@ export async function terminateOwnedTree(child, startedAt) {
   if (process.platform === 'win32') {
     const script = `$q = [System.Collections.Generic.Queue[int]]::new(); $q.Enqueue(${child.pid}); $seen = @{}; $rows = @(); while ($q.Count -gt 0 -and $rows.Count -lt 256) { $n = $q.Dequeue(); if ($seen.ContainsKey($n)) { continue }; $seen[$n] = $true; $p = Get-CimInstance Win32_Process -Filter "ProcessId = $n"; if ($p) { $rows += [pscustomobject]@{pid=$p.ProcessId; parent=$p.ParentProcessId; name=$p.Name; started=$p.CreationDate.ToUniversalTime().ToString('o')}; Get-CimInstance Win32_Process -Filter "ParentProcessId = $n" | ForEach-Object { $q.Enqueue([int]$_.ProcessId) } } }; ConvertTo-Json -InputObject @($rows) -Compress`;
     const { stdout } = await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
-      { windowsHide: true, timeout: 8000, maxBuffer: 131072 });
+      { windowsHide: true, timeout: 20000, maxBuffer: 131072 });
     const snapshot = JSON.parse(stdout || '[]');
     const tree = ownedProcessTree(snapshot, child.pid, startedAt);
     const root = tree.find(x => x.pid === child.pid);
@@ -38,12 +38,12 @@ export async function terminateOwnedTree(child, startedAt) {
       const ownedIdentities = tree.map(entry => `@{pid=${entry.pid};started='${entry.started}';name='${entry.name}'}`).join(',');
       const stop = `foreach ($item in @(${ownedIdentities})) { $p = Get-CimInstance Win32_Process -Filter "ProcessId = $($item.pid)"; if ($p -and $p.CreationDate.ToUniversalTime().ToString('o') -eq $item.started -and $p.Name -eq $item.name) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue } }`;
       await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', stop],
-        { windowsHide: true, timeout: 8000, maxBuffer: 131072 });
+        { windowsHide: true, timeout: 20000, maxBuffer: 131072 });
     }
     const identities = tree.map(p => `@{pid=${p.pid};started='${p.started}'}`).join(',');
     const verify = `$alive = @(); foreach ($item in @(${identities})) { $p = Get-CimInstance Win32_Process -Filter "ProcessId = $($item.pid)"; if ($p -and $p.CreationDate.ToUniversalTime().ToString('o') -eq $item.started) { $alive += $item.pid } }; ConvertTo-Json -InputObject @($alive) -Compress`;
     const checked = await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', verify],
-      { windowsHide: true, timeout: 8000, maxBuffer: 131072 });
+      { windowsHide: true, timeout: 20000, maxBuffer: 131072 });
     const survivors = JSON.parse(checked.stdout || '[]');
     return { status: survivors.length ? 'unconfirmed' : 'terminated', pid: child.pid, tree, survivors };
   }
@@ -84,8 +84,16 @@ export async function runProcess({ command, args, cwd, env = process.env, timeou
     stopPromise = terminateOwnedTree(child, startedAt).then(x => { cleanup = x; }).catch(() => {
       cleanup = { status: 'unconfirmed', pid: child.pid };
       if (child.exitCode === null && child.signalCode === null) child.kill();
-    }).finally(() => {
+    }).finally(async () => {
+      // Sending a signal is not exit evidence. Wait for Node to reap the root
+      // and close its pipes before allowing the caller to proceed.
+      if (!closed) await new Promise(resolve => {
+        const exited = () => { clearTimeout(deadline); resolve(); };
+        const deadline = setTimeout(() => { child.removeListener('close', exited); resolve(); }, 5000);
+        child.once('close', exited);
+      });
       if (!closed) {
+        cleanup = { ...cleanup, status: 'unconfirmed' };
         child.stdout.destroy(); child.stderr.destroy(); child.unref();
         finishClose?.({ exitCode: child.exitCode, exitSignal: child.signalCode });
       }
