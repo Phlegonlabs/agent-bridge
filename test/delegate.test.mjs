@@ -91,8 +91,11 @@ test('large transcripts move to a plain context file with the ask inline', async
 test('streaming requests pass raw text deltas through to the caller', async () => {
   let seen;
   const delta = text => { seen = text; };
-  const { captured } = await withDelegate(body.messages, null, delta);
-  assert.equal(captured[0].options.onPartial, delta);
+  const { captured, result } = await withDelegate(body.messages, null, delta);
+  assert.equal(typeof captured[0].options.onPartial, 'function', 'the relay wraps deltas to track streamed text');
+  captured[0].options.onPartial('live chunk');
+  assert.equal(seen, 'live chunk');
+  assert.equal(result.message.content, 'DELEGATED_OK', 'unstreamed results stay the audited answer');
 });
 
 test('renderDelegation extracts cwd and keeps the header free of relay language', () => {

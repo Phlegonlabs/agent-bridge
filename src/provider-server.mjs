@@ -89,7 +89,7 @@ function statusFor(code) {
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const MAX_RESPONSE_BYTES = 512 * 1024;
 
-export function createProviderServer({ config, token, relay, pool = new ProviderPool(config) }) {
+export function createProviderServer({ config, token, relay, pool = new ProviderPool(config), heartbeatMs = 10000 }) {
   validateProviderConfig(config);
   relay ??= new ModelRelay(config, pool);
   const controllers = new Set();
@@ -121,14 +121,20 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       const streamId = `chatcmpl-${randomUUID()}`, streamCreated = Math.floor(Date.now() / 1000);
       const sse = delta => `data: ${JSON.stringify({ id: streamId, object: 'chat.completion.chunk', created: streamCreated, model: body.model,
         choices: [{ index: 0, ...delta }] })}\n\n`;
-      let streamed = false;
+      let streamedText = '';
       const onContentDelta = body.stream && !body.response_format
-        ? text => { streamed = true; if (!res.destroyed && !controller.signal.aborted) res.write(sse({ delta: { content: text }, finish_reason: null })); }
+        ? text => { streamedText += text; if (!res.destroyed && !controller.signal.aborted) res.write(sse({ delta: { content: text }, finish_reason: null })); }
         : undefined;
       if (body.stream) {
         res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' }); res.flushHeaders();
         res.write(sse({ delta: { role: 'assistant', content: '' }, finish_reason: null }));
-        heartbeat = setInterval(() => { if (!res.destroyed) res.write(': waiting for CLI model\n\n'); }, 10000);
+        // Some clients drop streams whose idle timers only reset on data
+        // events (SSE comments do not count). An empty content delta is a
+        // protocol-legal no-op for rendering but reads as activity.
+        heartbeat = setInterval(() => { if (!res.destroyed) {
+          res.write(': waiting for CLI model\n\n');
+          res.write(sse({ delta: { content: '' }, finish_reason: null }));
+        } }, heartbeatMs);
       }
       const { message } = await relay.complete(body, { signal: controller.signal, onContentDelta, transport: {
         sessionId: req.headers['x-session-id'], sessionType: req.headers['x-zcode-session-type'],
@@ -138,7 +144,14 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       if (controller.signal.aborted) throw new BridgeError('REQUEST_TIMEOUT', 'The request deadline or client connection ended.');
       if (body.stream) {
         if (message.tool_calls?.length) res.write(sse({ delta: { tool_calls: message.tool_calls.map((call, index) => ({ index, ...call })) }, finish_reason: null }));
-        else if (!streamed && message.content) res.write(sse({ delta: { content: message.content }, finish_reason: null }));
+        else if (typeof message.content === 'string' && message.content !== streamedText) {
+          // Deliver only what the stream has not already shown: a continued
+          // (fallback) answer appends after the failed worker's partials.
+          const extra = message.content.startsWith(streamedText)
+            ? message.content.slice(streamedText.length)
+            : streamedText ? `\n\n${message.content}` : message.content;
+          if (extra) res.write(sse({ delta: { content: extra }, finish_reason: null }));
+        }
         res.write(sse({ delta: {}, finish_reason: message.tool_calls?.length ? 'tool_calls' : 'stop' }));
         res.end('data: [DONE]\n\n');
       }

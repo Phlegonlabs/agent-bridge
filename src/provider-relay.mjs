@@ -179,9 +179,11 @@ export class ModelRelay {
         return this.delegateFallback(body, decision, options, id, saved);
       }
     }
-    // A failed Claude stream cannot be retracted. Buffer fallback-enabled turns
-    // until the selected worker finishes, so partial replies never hide GPT output.
-    const streamed = Boolean(onContentDelta) && !body.response_format && !candidates.length;
+    // Streamed turns keep silent-phase clients alive (idle timers reset on
+    // content events, not comments). A failed worker is continued, never
+    // replaced: the fallback answer is appended after the streamed partials.
+    const streamed = Boolean(onContentDelta) && !body.response_format;
+    let streamedText = '';
     // The rendering happens per attempt: only a resumed native session can
     // safely continue from the prior turn's message boundary.
     let contextFile = null, contextMode = 'full', turnContext = null;
@@ -192,7 +194,7 @@ export class ModelRelay {
       return this.call(decision.route, rendering.task, { ...options, cwd: workspace,
         session: input.session, onNativeStarted: input.onNativeStarted,
         skipCooldown: candidates.length > 0 && this.config.fallback.on.includes('RATE_LIMITED'),
-        ...(streamed ? { onPartial: onContentDelta } : {}) });
+        ...(streamed ? { onPartial: text => { streamedText += text; onContentDelta(text); } } : {}) });
     };
     const selection = resolveModelSelection(route, options.requestedEffort);
     let result;
@@ -221,7 +223,11 @@ export class ModelRelay {
       return this.delegateFallback(body, decision, options, id, saved);
     }
     const denied = result.permissionDenials ?? [];
-    const message = { role: 'assistant', content: result.response + (denied.length
+    // A streamed turn's client already holds the worker's live text — the
+    // final answer arrives through the same delta stream — so the message is
+    // exactly what was streamed; buffered turns use the audited result text.
+    const content = streamed && streamedText ? streamedText : result.response;
+    const message = { role: 'assistant', content: content + (denied.length
       ? `\n\n[Claude permission report: ${denied.length} tool request(s) were denied; no permission bypass was attempted. Inspect the reported task outcome before accepting it as complete.]` : '') };
     const evidence = { id, mode: 'delegated-task', requestedModel: body.model, selected: decision.route,
       requestedEffort: body.reasoning_effort, effectiveEffort: selection.effort,

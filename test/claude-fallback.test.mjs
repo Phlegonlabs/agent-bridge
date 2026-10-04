@@ -53,7 +53,8 @@ for (const code of ['TIMEOUT', 'RATE_LIMITED']) test(`Claude ${code} continues w
   await fixture(async ({ relay, pool, calls, body, options, state, config }) => {
     const deltas = [];
     const first = await relay.complete(body, { ...options, onContentDelta: text => deltas.push(text) });
-    assert.equal(calls.length, 2); assert.deepEqual(deltas, []);
+    assert.equal(calls.length, 2); assert.deepEqual(deltas, ['unfinished Claude output'],
+      'the failed worker streams its partials even with fallback configured');
     assert.match(first.message.content, /gpt-6.1-sol \/ xhigh/);
     assert.equal(first.evidence.requestedModel, source); assert.equal(first.evidence.selected, target);
     assert.equal(first.evidence.effectiveEffort, 'xhigh'); assert.equal(first.evidence.actualEffort, 'xhigh');
@@ -119,7 +120,7 @@ test('fallback keeps host tool calls for the next ZCode turn', async () => {
   });
 });
 
-test('HTTP streaming delivers the GPT answer after a Claude timeout', async () => {
+test('HTTP streaming continues a failed Claude worker with the GPT answer', async () => {
   await fixture(async ({ relay, config, pool, body }) => {
     const server = createProviderServer({ config, pool, relay, token: 'fallback-test-key' });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -130,8 +131,59 @@ test('HTTP streaming delivers the GPT answer after a Claude timeout', async () =
       });
       assert.equal(response.status, 200);
       const stream = await response.text();
-      assert.match(stream, /continued work/); assert.match(stream, /gpt-6.1-sol/); assert.match(stream, /\[DONE\]/);
-      assert.doesNotMatch(stream, /unfinished Claude output/);
+      assert.match(stream, /unfinished Claude output/, 'the streamed partial stays visible');
+      assert.match(stream, /Claude TIMEOUT: continuing/); assert.match(stream, /continued work/);
+      assert.match(stream, /\[DONE\]/);
+      const partial = stream.indexOf('unfinished Claude output'), continuation = stream.indexOf('continued work');
+      assert.ok(partial !== -1 && continuation !== -1 && partial < continuation, 'the answer continues after the partials');
+    } finally { await server.shutdown(); }
+  });
+});
+
+test('HTTP streaming sends empty heartbeats while the worker is silent', async () => {
+  await fixture(async ({ relay, config, pool, body }) => {
+    const original = relay.invoke;
+    relay.invoke = async (route, prompt, settings) => {
+      if (route.provider !== 'claude') return original(route, prompt, settings);
+      await new Promise(resolve => setTimeout(resolve, 80));
+      return original(route, prompt, settings);
+    };
+    const server = createProviderServer({ config, pool, relay, token: 'fallback-test-key', heartbeatMs: 20 });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.address().port}/v1/chat/completions`, {
+        method: 'POST', headers: { Authorization: 'Bearer fallback-test-key', 'x-session-id': 'heartbeat-session', 'x-zcode-session-type': 'subagent' },
+        body: JSON.stringify({ ...body, stream: true }), signal: AbortSignal.timeout(5000),
+      });
+      const stream = await response.text();
+      const keepalives = stream.match(/"delta":\{"content":""\}/g) ?? [];
+      assert.ok(keepalives.length >= 2, `empty-delta heartbeats kept the stream active (got ${keepalives.length})`);
+      assert.match(stream, /\[DONE\]/);
+    } finally { await server.shutdown(); }
+  });
+});
+
+test('a streamed Claude success does not duplicate its final text', async () => {
+  await fixture(async ({ relay, config, pool, body, options }) => {
+    const original = relay.invoke;
+    relay.invoke = async (route, prompt, settings) => {
+      if (route.provider !== 'claude') return original(route, prompt, settings);
+      settings.onNativeStarted?.();
+      settings.onPartial?.('the finished Claude answer');
+      return { ok: true, code: 'VERIFIED', runId: 'claude-run', sessionId: settings.session.id,
+        response: 'the finished Claude answer', execution: { pid: 42, exitCode: 0 } };
+    };
+    const server = createProviderServer({ config, pool, relay, token: 'fallback-test-key' });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    try {
+      const response = await fetch(`http://127.0.0.1:${server.address().port}/v1/chat/completions`, {
+        method: 'POST', headers: { Authorization: 'Bearer fallback-test-key', 'x-session-id': 'success-session', 'x-zcode-session-type': 'subagent' },
+        body: JSON.stringify({ ...body, stream: true }), signal: AbortSignal.timeout(5000),
+      });
+      const stream = await response.text();
+      const occurrences = stream.match(/the finished Claude answer/g) ?? [];
+      assert.equal(occurrences.length, 1, 'the streamed text is the message; nothing is re-sent');
+      assert.match(stream, /\[DONE\]/);
     } finally { await server.shutdown(); }
   });
 });
