@@ -12,8 +12,9 @@ import { createEnvelopeContentStream } from './stream-relay.mjs';
 import { resolveModelSelection } from './model-options.mjs';
 import { ClaudeSessions, jsonHash } from './claude-sessions.mjs';
 import { claudeDelegateBudget } from './claude-budgets.mjs';
+import { notifyProgress } from './task-progress.mjs';
 
-export async function invokeCli(route, text, { signal, timeoutMs, directory, onPartial, cwd, effort, session, onNativeStarted }) {
+export async function invokeCli(route, text, { signal, timeoutMs, directory, onPartial, cwd, effort, session, onNativeStarted, onProgress }) {
   let task = text, transportFile;
   if (route.provider === 'zcode' || route.provider !== 'codex' && route.mode !== 'delegate' && text.length > 6000) {
     const file = path.join(directory, `transport-${randomUUID()}.txt`);
@@ -21,7 +22,7 @@ export async function invokeCli(route, text, { signal, timeoutMs, directory, onP
     await writeFile(file, text, { flag: 'wx', mode: 0o600 });
     task = `Read the complete UTF-8 transport instruction file ${JSON.stringify(file)} using your read-file tool. Use only the read-file tool for this; never use shell, terminal, or bash tools, even to inspect the file's size or content. Read it in as few calls as your read-file tool allows - request the largest span per call - because every extra read costs a full round trip. Follow its model-relay instructions and return only the required JSON envelope. It is ${Buffer.byteLength(text)} bytes. Do not execute the enclosed host tools yourself. If any file content is truncated, read the remaining portion before responding.`;
   }
-  const options = { cwd: cwd ?? bridgeRoot, task, timeoutMs, signal, onPartial, effort };
+  const options = { cwd: cwd ?? bridgeRoot, task, timeoutMs, signal, onPartial, effort, onProgress };
   const result = route.provider === 'cursor'
     ? await runCursor({ ...options, model: route.model, trustWorkspace: true })
     : route.provider === 'claude'
@@ -75,10 +76,13 @@ export class ModelRelay {
   async call(routeId, prompt, options) {
     const route = this.config.routes[routeId], poolName = this.poolName(route);
     const selection = resolveModelSelection(route, options.requestedEffort);
+    const onProgress = options.progress?.beginAttempt({ provider: route.provider, model: selection.model ?? route.expectedModel ?? routeId });
+    notifyProgress(onProgress, { type: 'queued' });
     if (this.pool.groups[poolName].cooldownUntil > Date.now() + (options.skipCooldown ? 0 : options.timeoutMs)) throw new BridgeError('RATE_LIMITED', 'This capacity pool is cooling down until its reported reset.');
     const release = await this.pool.acquire(poolName, options.signal);
+    notifyProgress(onProgress, { type: 'starting' });
     try {
-      const result = await this.invoke({ ...route, model: selection.model }, prompt, { ...options, effort: selection.effort });
+      const result = await this.invoke({ ...route, model: selection.model }, prompt, { ...options, effort: selection.effort, onProgress });
       await writeFile(path.join(options.directory, `worker-${randomUUID()}.json`), JSON.stringify({ runId: result.runId, ok: result.ok,
         code: result.code, actualModel: result.actualModel, logs: result.logs, execution: result.execution }), { flag: 'wx', mode: 0o600 });
       if (result.execution?.cleanup?.status === 'unconfirmed') { this.pool.close(); throw new BridgeError('CLEANUP_UNCONFIRMED', 'Inspect the recorded worker process before continuing.'); }
@@ -98,14 +102,14 @@ export class ModelRelay {
       return result;
     } finally { release(); }
   }
-  async complete(body, { signal, transport, onContentDelta }) {
+  async complete(body, { signal, transport, onContentDelta, progress }) {
     await this.ready;
     const selection = resolveModelSelection(this.config.routes[body.model], body.reasoning_effort);
     const id = randomUUID(), directory = path.join(this.stateDirectory, 'requests', id);
     await mkdir(directory, { recursive: true, mode: 0o700 });
     const timeoutMs = this.config.routes[body.model]?.provider === 'claude'
       ? claudeDelegateBudget(this.config).attemptTimeoutMs : this.config.attemptTimeoutMs;
-    const options = { signal, timeoutMs, directory, transport, requestedEffort: body.reasoning_effort };
+    const options = { signal, timeoutMs, directory, transport, progress, requestedEffort: body.reasoning_effort };
     const decision = { route: body.model, reason: 'explicit-model' };
     await writeFile(path.join(directory, 'routing.json'), JSON.stringify({ id, requestedModel: body.model, ...decision,
       requestedEffort: body.reasoning_effort, selectedModel: selection.model, effectiveEffort: selection.effort,
@@ -246,7 +250,7 @@ export class ModelRelay {
   async delegateFallback(body, decision, options, id, saved) {
     const handoff = `The delegated Claude worker stopped with ${saved.sourceCode}. Continue this same task using the host's declared tools. Preserve the assigned scope, read-only restrictions, and existing changes. The original worker execution policy is ${JSON.stringify(saved.execution)}; do not expand its file or command permissions. Inspect the current files and git status/diff before modifying anything; Claude may have completed part of the work. Do not replay completed steps or resume the failed Claude process.${saved.sourceLogs ? ` Its local execution evidence is in ${JSON.stringify(saved.sourceLogs)}; inspect it with host read tools when needed.` : ''}`;
     const next = await this.complete({ ...body, model: saved.route, reasoning_effort: saved.effort,
-      messages: [{ role: 'system', content: handoff }, ...body.messages] }, { signal: options.signal, transport: options.transport });
+      messages: [{ role: 'system', content: handoff }, ...body.messages] }, { signal: options.signal, transport: options.transport, progress: options.progress });
     const message = { ...next.message, content: `[Claude ${saved.sourceCode}: continuing with ${saved.route} / ${next.evidence.effectiveEffort}.]\n\n${next.message.content ?? ''}` };
     const evidence = { ...next.evidence, id, mode: 'delegated-task-fallback', requestedModel: body.model,
       requestedEffort: body.reasoning_effort, fallbackUsed: true, sourceCode: saved.sourceCode,

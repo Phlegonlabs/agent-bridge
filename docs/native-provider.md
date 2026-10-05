@@ -35,6 +35,29 @@ The server bounds owned jobs and connected waiters at 64 each.
 Terminal results remain cached for up to 15 minutes, at most 64 entries and 32 MiB.
 Detached connections release their waiters immediately.
 The authenticated `/status` endpoint exposes aggregate delegate counts.
+Use authenticated `GET /v1/tasks` for individual task status.
+Send the existing `x-session-id` and `x-zcode-session-type` headers to limit lookup to one session.
+Each completion returns `X-Agent-Bridge-Task-Id`; `GET /v1/tasks/<UUID>` looks up that task.
+An owned reconnect returns the same task ID and keeps the original deadline.
+Status distinguishes admission, queueing, process start, cleanup and audited completion.
+Only recognized native events update `lastActivityAt`; heartbeats and polling do not.
+`lastOutputAt` records pipe output separately. Neither timestamp proves useful work or task completion.
+Quiet tasks remain running until their existing deadline or explicit cancellation.
+Statuses contain no prompts, commands, reasoning text, tool arguments or native session IDs.
+Terminal status expires after 15 minutes or bounded retention. Provider restart loses in-memory status.
+An unavailable status never authorizes a retry or recovery.
+
+Check a task without starting or changing it:
+
+```sh
+node bin/bridge.mjs status --task-id UUID
+node bin/bridge.mjs status --session-id ID --session-type subagent --watch
+```
+
+The CLI reads the existing token privately. Default monitoring ends after ten minutes; Ctrl+C stops only the monitor.
+Use `--config FILE` when the provider uses a custom configuration.
+Native ZCode actor views may show only the final answer. Use this independent status monitor for those tasks.
+Status never becomes assistant answer text.
 Deadlines and provider shutdown clean up task-owned CLI processes, including detached workers.
 
 Never upload `.bridge`: it contains tokens, prompts, native session receipts and raw CLI logs. Run `npm test` for the offline suite. Legacy GLM profile workers remain available through `bin/bridge.mjs`, but no GLM native model route is registered because its relay dispatch audit fails.

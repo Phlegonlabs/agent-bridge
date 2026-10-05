@@ -187,6 +187,13 @@ Reconnects do not reset deadlines.
 Provider shutdown waits for worker cleanup.
 After a service crash, unfinished sessions require inspection before recovery.
 The authenticated `/status` endpoint reports active delegate jobs, waiters and retained results.
+Use `node bin/bridge.mjs status --watch` to inspect individual workflow actor and subagent requests.
+Filter with `--task-id UUID` or `--session-id ID --session-type subagent`.
+Task IDs arrive in the `X-Agent-Bridge-Task-Id` response header.
+Status separates queueing, worker start, last observed native activity, cleanup and audited completion.
+Heartbeat and polling do not advance activity. Silence does not trigger a rerun.
+The monitor ends after ten minutes by default; Ctrl+C stops only monitoring.
+Native ZCode views may still show only the final answer; status lookup remains independent.
 Results remain cached for up to 15 minutes, within count and memory limits.
 Completed Claude receipts also support replay after cache expiry or restart.
 HTTP reconnection cannot guarantee exactly-once rendering in the host UI.

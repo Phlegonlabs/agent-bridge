@@ -7,6 +7,8 @@ import { runProcess } from './process.mjs';
 import { createClaudeAudit } from './claude-audit.mjs';
 import { normalizeClaudeEffort, normalizeClaudeExecution, newSessionId } from './claude-permissions.mjs';
 import { nativeExecutable } from './runtime-paths.mjs';
+import { notifyProgress } from './task-progress.mjs';
+import { observeNativeProgress } from './native-progress.mjs';
 
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -56,7 +58,7 @@ export async function runClaude(input = {}) {
 }
 
 async function startClaude({ cwd, task, model, effort, execution, session, newSessionId: requestedNewSessionId,
-  timeoutMs = 60000, signal, claudeBin, onTextDelta, onSpawn, runProcessImpl = runProcess }, nativeState) {
+  timeoutMs = 60000, signal, claudeBin, onTextDelta, onSpawn, onProgress, runProcessImpl = runProcess }, nativeState) {
   if (typeof model !== 'string' || !model || model === 'auto') throw new BridgeError('CLAUDE_MODEL_REQUIRED', 'Choose an explicit Claude model id, for example claude-opus-5-5.');
   if (typeof task !== 'string' || !task.trim() || Buffer.byteLength(task) > 32768) throw new BridgeError('INVALID_TASK', 'Task must be 1..32768 bytes.');
   if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 7200000) throw new BridgeError('INVALID_TIMEOUT', 'Timeout must be 100..7200000 ms.');
@@ -80,7 +82,7 @@ async function startClaude({ cwd, task, model, effort, execution, session, newSe
   const audit = createClaudeAudit(model, { expectedSessionId: session?.id, effort: requestedEffort,
     mode: policy.mode, toolNames: policy.toolNames });
   // Partial text is advisory: verification still comes from the full audit.
-  const onLine = onTextDelta
+  const auditLine = onTextDelta
     ? line => {
         audit.ingest(line);
         if (line.includes('"stream_event"')) {
@@ -92,6 +94,10 @@ async function startClaude({ cwd, task, model, effort, execution, session, newSe
         }
       }
     : line => audit.ingest(line);
+  const onLine = line => {
+    auditLine(line);
+    notifyProgress(() => observeNativeProgress('claude', line, onProgress));
+  };
   const remainingMs = deadline - Date.now();
   if (remainingMs < 100) throw new BridgeError('TIMEOUT', 'Claude preflight exhausted the run deadline.');
   if (onSpawn !== undefined && typeof onSpawn !== 'function') {
@@ -109,9 +115,9 @@ async function startClaude({ cwd, task, model, effort, execution, session, newSe
       '--append-system-prompt', workerInstructions(policy), '--model', model,
       ...(requestedEffort ? ['--effort', requestedEffort] : []),
       ...sessionArgs,
-      ...(onTextDelta ? ['--include-partial-messages'] : []), '--', task],
+      ...(onTextDelta || onProgress ? ['--include-partial-messages'] : []), '--', task],
     timeoutMs: remainingMs, signal, stdoutPath: path.join(logs, 'events.jsonl'), stderrPath: path.join(logs, 'stderr.log'),
-    onLine, onSpawn: notifySpawn });
+    onLine, onSpawn: notifySpawn, onProgress: event => notifyProgress(onProgress, { ...event, runId }) });
   processResult.nativeStarted = processResult.nativeStarted ?? nativeState.started;
   if (processResult.reason === 'spawn_failed' && processResult.pid === undefined) processResult.nativeStarted = false;
   const report = { schema: 'agent-bridge/result/1', runId, ...audit.finish(processResult), mode: policy.mode,

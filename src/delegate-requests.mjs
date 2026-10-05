@@ -1,5 +1,6 @@
 import { BridgeError } from './profiles.mjs';
 import { jsonHash } from './claude-sessions.mjs';
+import { TaskStatuses } from './task-progress.mjs';
 
 export function delegateSessionKey(sessionId, sessionType = 'chat') {
   for (const [value, limit] of [[sessionId, 128], [sessionType, 64]]) {
@@ -19,8 +20,9 @@ export class DelegateRequests {
   #closed = false;
   #sweep;
   #limits;
-  constructor({ limit = 64, ttlMs = 15 * 60000, maxBytes = 32 * 1024 * 1024, now = Date.now } = {}) {
+  constructor({ limit = 64, ttlMs = 15 * 60000, maxBytes = 32 * 1024 * 1024, now = Date.now, statuses = new TaskStatuses({ now }) } = {}) {
     this.#limits = { limit, ttlMs, maxBytes, now };
+    this.statuses = statuses;
     this.#sweep = setInterval(() => this.#prune(), Math.min(ttlMs, 60000));
     this.#sweep.unref();
   }
@@ -36,7 +38,7 @@ export class DelegateRequests {
     }
   }
 
-  attach({ sessionKey, fingerprint, timeoutMs, start }) {
+  attach({ sessionKey, fingerprint, timeoutMs, start, metadata }) {
     this.#prune();
     if (this.#closed) throw new BridgeError('CANCELLED', 'The provider is stopping.');
     if (this.#waiters >= this.#limits.limit) throw new BridgeError('QUEUE_FULL', 'Too many connected delegate requests.');
@@ -49,24 +51,29 @@ export class DelegateRequests {
     if (!entry) {
       if (this.#active.size >= this.#limits.limit) throw new BridgeError('QUEUE_FULL', 'Too many owned delegate requests.');
       const controller = new AbortController();
-      entry = { fingerprint, controller, waiters: new Set(), outcome: null };
+      const progress = this.statuses.create({ ...metadata, deadlineAt: this.#limits.now() + timeoutMs }, sessionKey);
+      entry = { fingerprint, controller, progress, waiters: new Set(), outcome: null };
       this.#entries.set(key, entry); this.#active.set(sessionKey, entry);
+      controller.signal.addEventListener('abort', () => progress.update({ type: 'stopping' }), { once: true });
       const timer = setTimeout(() => controller.abort(new BridgeError('REQUEST_TIMEOUT', 'The delegate request deadline ended.')), timeoutMs);
       // Insertion precedes execution, including concurrent retries in this turn.
       const job = Promise.resolve().then(() => {
         controller.signal.throwIfAborted();
-        return start(controller.signal);
+        return start(controller.signal, progress);
       }).then(result => ({ result }), error => ({ error })).then(outcome => {
         clearTimeout(timer);
         const retryableAdmission = !controller.signal.aborted && outcome.error?.nativeExecutionStarted === false &&
           ['QUEUE_FULL', 'RATE_LIMITED', 'PROVIDER_UNAVAILABLE'].includes(outcome.error.code);
         if (controller.signal.aborted) outcome = { error: controller.signal.reason };
+        const recoveryRequired = outcome.error?.nativeExecutionStarted === true;
         if (outcome.error) {
           const error = outcome.error;
           outcome = { error: new BridgeError(error instanceof BridgeError ? error.code : 'PROVIDER_ERROR',
             error instanceof BridgeError ? error.message : 'Local delegate request failed.') };
         }
         entry.outcome = outcome; entry.finishedAt = this.#limits.now();
+        progress.settle({ ok: !outcome.error, code: outcome.error?.code ?? outcome.result?.code ?? 'VERIFIED',
+          actualModel: outcome.result?.actualModel, recoveryRequired });
         entry.bytes = Buffer.byteLength(JSON.stringify(outcome));
         this.#active.delete(sessionKey);
         if (retryableAdmission) this.#entries.delete(key);
@@ -75,11 +82,11 @@ export class DelegateRequests {
       }).finally(() => this.#jobs.delete(job));
       this.#jobs.add(job);
     }
-    if (entry.outcome) return { outcome: Promise.resolve(entry.outcome), detach() {} };
+    if (entry.outcome) return { taskId: entry.progress.record.taskId, outcome: Promise.resolve(entry.outcome), detach() {} };
     let resolve;
     const outcome = new Promise(done => { resolve = done; });
     entry.waiters.add(resolve); this.#waiters++;
-    return { outcome, detach: () => {
+    return { taskId: entry.progress.record.taskId, outcome, detach: () => {
       if (entry.waiters.delete(resolve)) { this.#waiters--; resolve({ detached: true }); }
     } };
   }

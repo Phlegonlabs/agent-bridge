@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import { open } from 'node:fs/promises';
 import { StringDecoder } from 'node:string_decoder';
 import { BridgeError } from './profiles.mjs';
+import { notifyProgress } from './task-progress.mjs';
 
 const execute = promisify(execFile);
 
@@ -68,7 +69,7 @@ export async function terminateOwnedTree(child, startedAt) {
 
 // The pipe is always drained. Only bounded line fragments and sanitized audit facts stay in RAM.
 export async function runProcess({ command, args, cwd, env = process.env, timeoutMs = 60000,
-  maxBytes = 8 * 1024 * 1024, stdoutPath, stderrPath, onLine = () => {}, onStderrLine = () => {}, onSpawn, stdinText, signal }) {
+  maxBytes = 8 * 1024 * 1024, stdoutPath, stderrPath, onLine = () => {}, onStderrLine = () => {}, onSpawn, onProgress, stdinText, signal }) {
   if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 7200000) throw new BridgeError('INVALID_TIMEOUT', 'Timeout must be 100..7200000 ms.');
   if (stdinText !== undefined && (typeof stdinText !== 'string' || Buffer.byteLength(stdinText) > 4 * 1024 * 1024)) {
     throw new BridgeError('INVALID_INPUT', 'Process input must be text of at most 4 MiB.');
@@ -96,6 +97,7 @@ export async function runProcess({ command, args, cwd, env = process.env, timeou
   function stop(why) {
     if (stopPromise) return stopPromise;
     reason = why;
+    notifyProgress(onProgress, { type: 'stopping' });
     stopPromise = terminateOwnedTree(child, startedAt).then(x => { cleanup = x; }).catch(() => {
       cleanup = { status: 'unconfirmed', pid: child.pid };
       if (child.exitCode === null && child.signalCode === null) child.kill();
@@ -123,6 +125,7 @@ export async function runProcess({ command, args, cwd, env = process.env, timeou
     bytes += chunk.length;
     if (bytes > maxBytes) { stop('output_limit'); return; }
     persist(isError ? err : out, chunk);
+    notifyProgress(onProgress, { type: 'output' });
     if (isError) {
       errorTail += errorDecoder.write(chunk);
       let end;
@@ -143,6 +146,7 @@ export async function runProcess({ command, args, cwd, env = process.env, timeou
   child.stdout.on('data', x => receive(x, false));
   child.stderr.on('data', x => receive(x, true));
   child.once('spawn', () => {
+    notifyProgress(onProgress, { type: 'running' });
     try { onSpawn?.({ pid: child.pid, startedAt, command, cwd }); }
     catch (error) { void stop(error.code ?? 'spawn_hook_failed'); }
     if (stdinText !== undefined) child.stdin.end(stdinText, 'utf8');
@@ -155,7 +159,9 @@ export async function runProcess({ command, args, cwd, env = process.env, timeou
   const result = await new Promise(resolve => {
     finishClose = resolve;
     child.on('error', () => { reason ??= 'spawn_failed'; });
-    child.on('close', (exitCode, exitSignal) => { closed = true; resolve({ exitCode, exitSignal }); });
+    child.on('close', (exitCode, exitSignal) => {
+      closed = true; notifyProgress(onProgress, { type: 'finishing' }); resolve({ exitCode, exitSignal });
+    });
   });
   clearTimeout(timer); signal?.removeEventListener('abort', abort);
   if (!reason) { tail += decoder.end(); if (tail.trim()) acceptLine(tail); }

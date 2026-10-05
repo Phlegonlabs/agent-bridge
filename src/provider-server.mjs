@@ -13,6 +13,7 @@ import { validateRouteReasoning, resolveModelSelection } from './model-options.m
 import { normalizeClaudeExecution } from './claude-permissions.mjs';
 import { providerConfigPath } from './provider-config-path.mjs';
 import { hash } from './profiles.mjs';
+import { TaskStatuses, taskIdPattern } from './task-progress.mjs';
 export const providerState = path.join(bridgeRoot, '.bridge', 'provider');
 export async function localToken(state = providerState) {
   await mkdir(state, { recursive: true, mode: 0o700 });
@@ -96,11 +97,12 @@ export function createProviderServer({ config, token, relay, pool = new Provider
   validateProviderConfig(config);
   relay ??= new ModelRelay(config, pool);
   const controllers = new Set();
-  const delegates = new DelegateRequests();
+  const statuses = new TaskStatuses();
+  const delegates = new DelegateRequests({ statuses });
   const modelIds = Object.keys(config.routes);
   const send = (res, status, value) => { if (!res.destroyed) { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); } };
   const server = http.createServer(async (req, res) => {
-    let timer, heartbeat, controller, attachment;
+    let timer, heartbeat, controller, attachment, progress;
     try {
       if (req.headers.origin || !/^(127\.0\.0\.1|localhost):\d+$/.test(req.headers.host ?? '')) { send(res, 403, { error: { message: 'Loopback clients only.', type: 'access_denied' } }); return; }
       if (req.method === 'GET' && req.url === '/health') { send(res, 200, { service: 'agent-bridge', version: 1, ready: !pool.stopped, configSha256: hash(JSON.stringify(config)) }); return; }
@@ -109,10 +111,23 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       if (req.method === 'POST' && req.url === '/shutdown') { send(res, 202, { stopping: true }); void server.shutdown(); return; }
       if (req.method === 'GET' && req.url === '/v1/models') { send(res, 200, { object: 'list', data: modelIds.map(id => ({ id, object: 'model', created: 0, owned_by: 'local-workflow-bridge' })) }); return; }
       if (req.method === 'GET' && req.url === '/status') { send(res, 200, { ...pool.snapshot(), delegates: delegates.snapshot(), fallbackEnabled: config.fallback.enabled, fallback: config.fallback, routes: modelIds }); return; }
+      if (req.method === 'GET' && (req.url === '/v1/tasks' || req.url.startsWith('/v1/tasks/'))) {
+        if (req.url === '/v1/tasks') {
+          const sessionKey = req.headers['x-session-id'] === undefined ? undefined :
+            delegateSessionKey(req.headers['x-session-id'], req.headers['x-zcode-session-type']);
+          send(res, 200, { schema: 'agent-bridge/tasks/1', tasks: statuses.list(sessionKey) });
+        } else {
+          const taskId = req.url.slice('/v1/tasks/'.length);
+          if (!taskIdPattern.test(taskId)) throw new BridgeError('INVALID_TASK_ID', 'Use a UUID task ID.');
+          const task = statuses.get(taskId);
+          send(res, task ? 200 : 404, { schema: 'agent-bridge/tasks/1', available: Boolean(task), tasks: task ? [task] : [] });
+        }
+        return;
+      }
       if (req.method !== 'POST' || req.url !== '/v1/chat/completions') { send(res, 404, { error: { message: 'Use /v1/chat/completions.', type: 'not_found' } }); return; }
       if (controllers.size >= 64) throw new BridgeError('QUEUE_FULL', 'Too many queued requests.');
       controller = new AbortController(); controllers.add(controller);
-      timer = setTimeout(() => controller.abort(), config.requestTimeoutMs);
+      timer = setTimeout(() => controller.abort(new BridgeError('REQUEST_TIMEOUT', 'The request deadline ended.')), config.requestTimeoutMs);
       res.on('close', () => {
         clearInterval(heartbeat);
         if (attachment) attachment.detach();
@@ -133,21 +148,30 @@ export function createProviderServer({ config, token, relay, pool = new Provider
         (route.sessionContinuity || route.execution?.mode === 'workspace-write');
       if (route.provider === 'claude') {
         clearTimeout(timer);
-        timer = setTimeout(() => controller.abort(), claudeDelegateBudget(config).requestTimeoutMs);
+        timer = setTimeout(() => controller.abort(new BridgeError('REQUEST_TIMEOUT', 'The request deadline ended.')), claudeDelegateBudget(config).requestTimeoutMs);
       }
       if (owned) {
         const sessionKey = delegateSessionKey(transport.sessionId, transport.sessionType);
         attachment = delegates.attach({ sessionKey, fingerprint: delegationFingerprint(body, selection),
-          timeoutMs: claudeDelegateBudget(config).requestTimeoutMs, start: async signal => {
-            const { message } = await relay.complete(body, { signal, transport });
+          metadata: { provider: route.provider, model: body.model },
+          timeoutMs: claudeDelegateBudget(config).requestTimeoutMs, start: async (signal, taskProgress) => {
+            const { message, evidence } = await relay.complete(body, { signal, transport, progress: taskProgress });
             if (Buffer.byteLength(JSON.stringify(completion(message, body.model))) > MAX_RESPONSE_BYTES) {
               throw new BridgeError('RESPONSE_TOO_LARGE', 'Model response exceeds the local limit.');
             }
-            return { message };
+            return { message, actualModel: evidence?.actualModel,
+              code: evidence?.permissionDenials?.length ? 'VERIFIED_WITH_PERMISSION_DENIALS' : 'VERIFIED' };
           } });
         clearTimeout(timer); controllers.delete(controller);
         if (res.destroyed) attachment.detach();
       }
+      if (!owned) {
+        const sessionKey = transport.sessionId === undefined ? undefined : delegateSessionKey(transport.sessionId, transport.sessionType);
+        const budget = route.provider === 'claude' ? claudeDelegateBudget(config).requestTimeoutMs : config.requestTimeoutMs;
+        progress = statuses.create({ provider: route.provider, model: body.model, deadlineAt: Date.now() + budget }, sessionKey);
+        controller.signal.addEventListener('abort', () => progress.update({ type: 'stopping' }), { once: true });
+      }
+      res.setHeader('X-Agent-Bridge-Task-Id', attachment?.taskId ?? progress.record.taskId);
       const streamId = `chatcmpl-${randomUUID()}`, streamCreated = Math.floor(Date.now() / 1000);
       const sse = delta => `data: ${JSON.stringify({ id: streamId, object: 'chat.completion.chunk', created: streamCreated, model: body.model,
         choices: [{ index: 0, ...delta }] })}\n\n`;
@@ -172,11 +196,12 @@ export function createProviderServer({ config, token, relay, pool = new Provider
         if (outcome.detached) return;
         if (outcome.error) throw outcome.error;
         answer = outcome.result;
-      } else answer = await relay.complete(body, { signal: controller.signal, onContentDelta, transport });
+      } else answer = await relay.complete(body, { signal: controller.signal, onContentDelta, transport, progress });
       const { message } = answer;
       const result = completion(message, body.model, streamId);
       if (Buffer.byteLength(JSON.stringify(result)) > MAX_RESPONSE_BYTES) throw new BridgeError('RESPONSE_TOO_LARGE', 'Model response exceeds the local limit.');
       if (controller.signal.aborted) throw new BridgeError('REQUEST_TIMEOUT', 'The request deadline or client connection ended.');
+      progress?.settle({ ok: true, code: 'VERIFIED', actualModel: answer.evidence?.actualModel });
       if (body.stream) {
         if (message.tool_calls?.length) res.write(sse({ delta: { tool_calls: message.tool_calls.map((call, index) => ({ index, ...call })) }, finish_reason: null }));
         else if (typeof message.content === 'string' && message.content !== streamedText) {
@@ -193,6 +218,8 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       else send(res, 200, result);
     } catch (error) {
       const code = error instanceof BridgeError ? error.code : 'PROVIDER_ERROR';
+      progress?.settle({ ok: false, code: controller?.signal.aborted ? controller.signal.reason?.code ?? 'CANCELLED' : code,
+        recoveryRequired: error.nativeExecutionStarted === true });
       const value = { error: { message: error instanceof BridgeError ? error.message : 'Local provider request failed.', type: 'api_error', code } };
       if (res.headersSent) { if (!res.destroyed) { res.write(`data: ${JSON.stringify(value)}\n\n`); res.end(); } }
       else { if (statusFor(code) === 429) res.setHeader('Retry-After', '15'); send(res, statusFor(code), value); }

@@ -186,6 +186,13 @@ Bridge 會接回原本的任務，切換串流或一次回傳也適用。
 重連不會重設期限，provider shutdown 會等待 worker cleanup 完成。
 服務崩潰後，未完成的 session 必須先檢查，再進行 recovery。
 通過驗證的 `/status` 會顯示執行中的 delegate jobs、等待連線及暫存結果數。
+使用 `node bin/bridge.mjs status --watch` 查看個別 workflow actor 與 subagent 請求。
+可用 `--task-id UUID` 或 `--session-id ID --session-type subagent` 篩選。
+任務 ID 由回應 header `X-Agent-Bridge-Task-Id` 提供。
+狀態分開顯示排隊、worker 啟動、最後觀察到的原生活動、cleanup 與最終驗證結果。
+Heartbeat 和查詢不更新活動時間；安靜一段時間不會觸發重跑。
+監看預設十分鐘後結束；Ctrl+C 只停止監看。
+ZCode 原生畫面可能仍只顯示最終答案；可獨立查詢任務狀態。
 結果最多暫存 15 分鐘，並受數量及記憶體上限限制。
 已完成的 Claude receipt 也能在暫存到期或服務重啟後回傳結果。
 HTTP 重連不能保證主程式畫面只顯示一次結果。

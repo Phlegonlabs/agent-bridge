@@ -5,7 +5,25 @@ export const terminalStates = new Set(['finished', 'failed', 'cancelled']);
 const lifecycleStates = new Set(['queued', 'starting', 'running', 'finishing', 'stopping']);
 const activityKinds = new Set(['thinking', 'text', 'tool_started', 'tool_finished', 'native_retry']);
 const safeName = value => typeof value === 'string' && /^[a-zA-Z0-9._-]{1,128}$/.test(value) ? value : null;
+const safeModel = value => typeof value === 'string' && /^[a-zA-Z0-9._/-]{1,128}$/.test(value) ? value : null;
 export const taskIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function publicTaskStatus(value) {
+  if (value?.schema !== 'agent-bridge/task-status/1' || !taskIdPattern.test(value.taskId) ||
+      !new Set(['accepted', ...lifecycleStates, ...terminalStates]).has(value.state)) {
+    throw new BridgeError('STATUS_UNAVAILABLE', 'Invalid task status record.');
+  }
+  const result = { schema: value.schema, taskId: value.taskId, state: value.state };
+  for (const key of ['parentRunId', 'jobId', 'provider', 'runId', 'code']) result[key] = safeName(value[key]);
+  for (const key of ['requestedModel', 'actualModel']) result[key] = safeModel(value[key]);
+  result.lastActivityKind = activityKinds.has(value.lastActivityKind) ? value.lastActivityKind : null;
+  for (const key of ['revision', 'attempt', 'acceptedAt', 'queuedAt', 'startedAt', 'lastOutputAt',
+    'lastActivityAt', 'finishedAt', 'deadlineAt', 'elapsedMs', 'lastActivityAgeMs']) {
+    result[key] = Number.isFinite(value[key]) && value[key] >= 0 ? value[key] : null;
+  }
+  result.recoveryRequired = value.recoveryRequired === true;
+  return result;
+}
 
 // Observability cannot change execution, permission, audit or cleanup behavior.
 export function notifyProgress(observer, event) {
@@ -19,7 +37,7 @@ export class TaskProgress {
     this.now = now; this.onChange = onChange;
     this.record = { schema: 'agent-bridge/task-status/1', taskId,
       parentRunId: safeName(parentRunId), jobId: safeName(jobId), provider: safeName(provider),
-      requestedModel: safeName(model), actualModel: null, runId: null,
+      requestedModel: safeModel(model), actualModel: null, runId: null,
       state: 'accepted', revision: 1, attempt: 0, acceptedAt: now(), queuedAt: null,
       startedAt: null, lastOutputAt: null, lastActivityAt: null, lastActivityKind: null,
       finishedAt: null, deadlineAt: Number.isFinite(deadlineAt) ? deadlineAt : null,
@@ -30,7 +48,7 @@ export class TaskProgress {
   beginAttempt({ provider, model } = {}) {
     if (terminalStates.has(this.record.state) || this.record.state === 'stopping') return () => {};
     const attempt = ++this.record.attempt;
-    this.record.provider = safeName(provider); this.record.requestedModel = safeName(model);
+    this.record.provider = safeName(provider); this.record.requestedModel = safeModel(model);
     this.record.runId = null; this.record.state = 'starting'; this.changed();
     return event => { if (attempt === this.record.attempt) this.update(event); };
   }
@@ -59,7 +77,7 @@ export class TaskProgress {
     if (terminalStates.has(this.record.state)) return;
     this.record.state = ok === true ? 'finished' : code === 'CANCELLED' ? 'cancelled' : 'failed';
     this.record.code = safeName(code) ?? (ok === true ? 'VERIFIED' : 'PROVIDER_ERROR');
-    this.record.actualModel = ok === true ? safeName(actualModel) : null;
+    this.record.actualModel = ok === true ? safeModel(actualModel) : null;
     this.record.recoveryRequired = recoveryRequired === true ||
       ['CLEANUP_UNCONFIRMED', 'SESSION_RECOVERY_REQUIRED'].includes(code);
     this.record.finishedAt = this.now(); this.changed();

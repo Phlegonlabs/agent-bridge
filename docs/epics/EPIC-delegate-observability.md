@@ -41,3 +41,13 @@ Four focused tests passed with `node --test --test-timeout=10000 test/task-progr
 Provider, workflow and CLI integration remain pending.
 Installed Harness is 0.61.0; loaded skill identity is unobserved.
 The shared AGENTS instructions match the installed template by meaning, with the retained deployment paragraph.
+
+2026-10-05 — after `4b6ec3e`, working-tree: connect provider tasks to native process observations.
+Scope: native adapters, process hooks, relay, delegate registry, authenticated task API and status CLI.
+Owned reconnects retain one ID. Recognized activity remains separate from output and heartbeat timestamps.
+Forty-two focused tests passed, including queueing, reconnect, privacy, audit failure and existing cleanup tests.
+Evidence: `.bridge/progress-native-0bcfe0c0-4591-47ba-8cae-80d6eca2f4bd.log`.
+The README pair and native provider guide now document lookup and the native UI limitation.
+Workflow persistence and final regression remain pending. No live provider was restarted.
+The final native-path check passed 80 tests after bounded client decoding and deadline-code separation.
+Evidence: `.bridge/progress-native-final-780c69bd-dd7e-4c1d-a9b4-5100ec1ccf1a.log`.

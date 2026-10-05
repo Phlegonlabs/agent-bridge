@@ -7,6 +7,8 @@ import { runProcess } from './process.mjs';
 import { createCodexAudit } from './codex-audit.mjs';
 import { codexHomeDirectory, codexModelCatalog, normalizeEffortValue, selectCodexModel } from './model-options.mjs';
 import { nativeExecutable } from './runtime-paths.mjs';
+import { notifyProgress } from './task-progress.mjs';
+import { observeNativeProgress } from './native-progress.mjs';
 
 
 // Node spawns without a shell, so an npm launcher shim cannot be executed
@@ -50,7 +52,7 @@ async function verifyRollout(threadId, codexHome = codexHomeDirectory()) {
   return { sessionConfirmed: false, reportedModel: undefined };
 }
 
-export async function runCodex({ cwd, task, model, effort, timeoutMs = 60000, signal, codexBin }) {
+export async function runCodex({ cwd, task, model, effort, timeoutMs = 60000, signal, codexBin, onProgress }) {
   if (typeof model !== 'string' || !model || model === 'auto') throw new BridgeError('CODEX_MODEL_REQUIRED', 'Choose an explicit Codex model id, for example gpt-6.1-sol.');
   if (typeof task !== 'string' || !task.trim() || Buffer.byteLength(task) > 4 * 1024 * 1024) {
     throw new BridgeError('INVALID_TASK', 'Task must be 1..4194304 bytes.');
@@ -85,7 +87,8 @@ export async function runCodex({ cwd, task, model, effort, timeoutMs = 60000, si
       '--', '-'],
     timeoutMs: remainingMs, signal, stdinText: task,
     stdoutPath: path.join(logs, 'events.jsonl'), stderrPath: path.join(logs, 'stderr.log'),
-    onLine: line => audit.ingest(line) });
+    onProgress: event => notifyProgress(onProgress, { ...event, runId }),
+    onLine: line => { audit.ingest(line); notifyProgress(() => observeNativeProgress('codex', line, onProgress)); } });
   // A missing or ambiguous rollout means the dispatch cannot be verified; the
   // audit then fails CODEX_SESSION_UNVERIFIED instead of guessing.
   const rollout = await verifyRollout(audit.threadId, codexHome)

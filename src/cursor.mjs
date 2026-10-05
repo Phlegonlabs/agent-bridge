@@ -7,6 +7,8 @@ import { runProcess } from './process.mjs';
 import { createCursorAudit, parseCursorModels } from './cursor-audit.mjs';
 import { normalizeEffortValue, selectCursorModel } from './model-options.mjs';
 import { nativeExecutable } from './runtime-paths.mjs';
+import { notifyProgress } from './task-progress.mjs';
+import { observeNativeProgress } from './native-progress.mjs';
 
 export const cursorBuild = '2026.09.18-9a7762b';
 export async function cursorRuntime(directory = process.env.CURSOR_BRIDGE_DIR) {
@@ -65,7 +67,7 @@ export async function cursorLogin(runtime, { signal, onAuthorizeUrl = () => {} }
   return cursorDoctor(runtime, { signal });
 }
 
-export async function runCursor({ cwd, task, model, effort, cursorDir, timeoutMs = 60000, signal, trustWorkspace = false }) {
+export async function runCursor({ cwd, task, model, effort, cursorDir, timeoutMs = 60000, signal, trustWorkspace = false, onProgress }) {
   if (typeof model !== 'string' || !model || model === 'auto') throw new BridgeError('CURSOR_MODEL_REQUIRED', 'Choose an explicit Cursor model from models --provider cursor; Auto cannot prove a fixed model.');
   if (typeof task !== 'string' || !task.trim() || Buffer.byteLength(task) > 32768) throw new BridgeError('INVALID_TASK', 'Task must be 1..32768 bytes.');
   if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 600000) throw new BridgeError('INVALID_TIMEOUT', 'Timeout must be 100..600000 ms.');
@@ -90,7 +92,9 @@ export async function runCursor({ cwd, task, model, effort, cursorDir, timeoutMs
   const execution = await runProcess({ command: runtime.command, cwd: workspace, env: runtime.env,
     args: [...runtime.prefix, '--print', '--output-format', 'stream-json', '--mode', 'ask',
       '--model', selected.model, '--workspace', workspace, ...(trustWorkspace ? ['--trust'] : []), '--', task],
-    timeoutMs: remainingMs, signal, stdoutPath: path.join(logs, 'events.jsonl'), stderrPath: path.join(logs, 'stderr.log'), onLine: audit.ingest });
+    timeoutMs: remainingMs, signal, stdoutPath: path.join(logs, 'events.jsonl'), stderrPath: path.join(logs, 'stderr.log'),
+    onProgress: event => notifyProgress(onProgress, { ...event, runId }),
+    onLine: line => { audit.ingest(line); notifyProgress(() => observeNativeProgress('cursor', line, onProgress)); } });
   const report = { schema: 'agent-bridge/result/1', runId, ...audit.finish(execution), mode: 'ask', execution, logs };
   await writeFile(path.join(logs, 'result.json'), JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
   return report;
