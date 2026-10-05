@@ -50,7 +50,10 @@ export class TaskProgress {
     if (terminalStates.has(this.record.state) || this.record.state === 'stopping') return () => {};
     const attempt = ++this.record.attempt;
     this.record.provider = safeName(provider); this.record.requestedModel = safeModel(model);
-    this.record.runId = null; this.record.state = 'starting'; this.changed();
+    this.record.runId = null; this.record.startedAt = null;
+    this.record.lastOutputAt = null; this.record.lastActivityAt = null; this.record.lastActivityKind = null;
+    if (attempt > 1) this.record.queuedAt = null;
+    this.record.state = 'starting'; this.changed();
     return event => { if (attempt === this.record.attempt) this.update(event); };
   }
 

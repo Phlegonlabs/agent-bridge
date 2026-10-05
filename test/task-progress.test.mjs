@@ -69,3 +69,19 @@ test('asynchronous observer rejection is isolated from worker execution', async 
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(task.snapshot().state, 'finished');
 });
+
+test('a new attempt never attributes the old worker activity or start to its replacement', () => {
+  let time = 1000;
+  const task = new TaskProgress({ now: () => time, deadlineAt: 9000 });
+  const original = task.beginAttempt({ provider: 'claude', model: 'opus' });
+  original({ type: 'running', runId: 'first-run' });
+  original({ type: 'activity', kind: 'tool_finished' }); original({ type: 'output' });
+  time = 2000;
+  const replacement = task.beginAttempt({ provider: 'codex', model: 'gpt' }); replacement({ type: 'queued' });
+  const queued = task.snapshot();
+  assert.equal(queued.provider, 'codex'); assert.equal(queued.startedAt, null);
+  assert.equal(queued.lastActivityAt, null); assert.equal(queued.lastActivityKind, null);
+  assert.equal(queued.lastOutputAt, null); assert.equal(queued.runId, null);
+  assert.equal(queued.deadlineAt, 9000); assert.equal(queued.acceptedAt, 1000);
+  original({ type: 'activity', kind: 'thinking' }); assert.equal(task.snapshot().lastActivityAt, null);
+});

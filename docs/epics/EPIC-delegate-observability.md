@@ -75,3 +75,8 @@ Evidence: `.bridge/observability-final-d2b88524-69c6-413a-bf72-650e081487f1.log`
 Independent review found that deadline substitution discarded native recovery evidence.
 The registry now retains that evidence before selecting the public cancellation/deadline code.
 A focused regression observes stopping through cleanup and recovery-required failure afterward.
+
+2026-10-05 — after `8e0997b`, fix the independent review's attempt-boundary finding.
+A replacement attempt clears prior worker start, output and activity observations.
+Task admission and deadline remain unchanged. Stale callbacks still cannot alter the replacement attempt.
+The regression begins with real first-attempt activity before queueing the next provider.
