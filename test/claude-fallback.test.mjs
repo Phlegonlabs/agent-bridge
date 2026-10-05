@@ -130,11 +130,9 @@ test('HTTP streaming continues a failed Claude worker with the GPT answer', asyn
       });
       assert.equal(response.status, 200);
       const stream = await response.text();
-      assert.match(stream, /unfinished Claude output/, 'the streamed partial stays visible');
+      assert.doesNotMatch(stream, /unfinished Claude output/, 'owned turns deliver only audited terminal text');
       assert.match(stream, /Claude TIMEOUT: continuing/); assert.match(stream, /continued work/);
       assert.match(stream, /\[DONE\]/);
-      const partial = stream.indexOf('unfinished Claude output'), continuation = stream.indexOf('continued work');
-      assert.ok(partial !== -1 && continuation !== -1 && partial < continuation, 'the answer continues after the partials');
     } finally { await server.shutdown(); }
   });
 });

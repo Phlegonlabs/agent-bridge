@@ -82,6 +82,16 @@ Shutdown waits for controlled cleanup before releasing ownership.
 Evidence: `.bridge/registry-check-1791183996960/stdout.log`.
 HTTP integration remains pending.
 
+2026-10-05 — HTTP integration after `aa511df`.
+Connections detach from owned Claude tasks without cancelling their workers.
+Authenticated identical retries attach before SSE headers; other active turns return 409.
+Owned responses contain heartbeats and audited final text only.
+The status endpoint reports aggregate jobs, waiters and cache counts.
+Focused HTTP, fallback and provider tests passed, exit 0.
+Twenty real HTTP disconnects retained one synthetic worker and one recorded side effect.
+Shutdown waited for detached cleanup; ordinary relay disconnects still cancelled work.
+Evidence: `.bridge/http-reconnect-1791184155151/stdout.log`.
+
 Implementation, independent review and final regression remain pending.
 The running provider remains owned by its existing operator.
 WineGlobe remains read-only, including its unrelated untracked `nul` file.

@@ -5,7 +5,8 @@ import path from 'node:path';
 import { bridgeRoot } from './account.mjs';
 import { BridgeError } from './profiles.mjs';
 import { ProviderPool } from './provider-pool.mjs';
-import { ModelRelay } from './provider-relay.mjs';
+import { ModelRelay, delegationFingerprint } from './provider-relay.mjs';
+import { DelegateRequests, delegateSessionKey } from './delegate-requests.mjs';
 import { validateChat, completion } from './provider-protocol.mjs';
 import { validateRouteReasoning, resolveModelSelection } from './model-options.mjs';
 import { normalizeClaudeExecution } from './claude-permissions.mjs';
@@ -93,10 +94,11 @@ export function createProviderServer({ config, token, relay, pool = new Provider
   validateProviderConfig(config);
   relay ??= new ModelRelay(config, pool);
   const controllers = new Set();
+  const delegates = new DelegateRequests();
   const modelIds = Object.keys(config.routes);
   const send = (res, status, value) => { if (!res.destroyed) { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); } };
   const server = http.createServer(async (req, res) => {
-    let timer, heartbeat, controller;
+    let timer, heartbeat, controller, attachment;
     try {
       if (req.headers.origin || !/^(127\.0\.0\.1|localhost):\d+$/.test(req.headers.host ?? '')) { send(res, 403, { error: { message: 'Loopback clients only.', type: 'access_denied' } }); return; }
       if (req.method === 'GET' && req.url === '/health') { send(res, 200, { service: 'agent-bridge', version: 1, ready: !pool.stopped, configSha256: hash(JSON.stringify(config)) }); return; }
@@ -104,12 +106,16 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) { send(res, 401, { error: { message: 'Invalid local provider key.', type: 'authentication_error' } }); return; }
       if (req.method === 'POST' && req.url === '/shutdown') { send(res, 202, { stopping: true }); void server.shutdown(); return; }
       if (req.method === 'GET' && req.url === '/v1/models') { send(res, 200, { object: 'list', data: modelIds.map(id => ({ id, object: 'model', created: 0, owned_by: 'local-workflow-bridge' })) }); return; }
-      if (req.method === 'GET' && req.url === '/status') { send(res, 200, { ...pool.snapshot(), fallbackEnabled: config.fallback.enabled, fallback: config.fallback, routes: modelIds }); return; }
+      if (req.method === 'GET' && req.url === '/status') { send(res, 200, { ...pool.snapshot(), delegates: delegates.snapshot(), fallbackEnabled: config.fallback.enabled, fallback: config.fallback, routes: modelIds }); return; }
       if (req.method !== 'POST' || req.url !== '/v1/chat/completions') { send(res, 404, { error: { message: 'Use /v1/chat/completions.', type: 'not_found' } }); return; }
       if (controllers.size >= 64) throw new BridgeError('QUEUE_FULL', 'Too many queued requests.');
       controller = new AbortController(); controllers.add(controller);
       timer = setTimeout(() => controller.abort(), config.requestTimeoutMs);
-      res.on('close', () => { if (!res.writableEnded) controller.abort(); });
+      res.on('close', () => {
+        clearInterval(heartbeat);
+        if (attachment) attachment.detach();
+        else if (!res.writableEnded) controller.abort();
+      });
       const chunks = []; let size = 0;
       for await (const chunk of req) {
         size += chunk.length;
@@ -118,11 +124,29 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       }
       let body; try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw new BridgeError('INVALID_REQUEST', 'Invalid JSON body.'); }
       validateChat(body, modelIds);
+      const route = config.routes[body.model];
+      const selection = resolveModelSelection(route, body.reasoning_effort);
+      const transport = { sessionId: req.headers['x-session-id'], sessionType: req.headers['x-zcode-session-type'] };
+      const owned = route.provider === 'claude' && route.mode === 'delegate' && transport.sessionId !== undefined &&
+        (route.sessionContinuity || route.execution?.mode === 'workspace-write');
+      if (owned) {
+        const sessionKey = delegateSessionKey(transport.sessionId, transport.sessionType);
+        attachment = delegates.attach({ sessionKey, fingerprint: delegationFingerprint(body, selection),
+          timeoutMs: config.requestTimeoutMs, start: async signal => {
+            const { message } = await relay.complete(body, { signal, transport });
+            if (Buffer.byteLength(JSON.stringify(completion(message, body.model))) > MAX_RESPONSE_BYTES) {
+              throw new BridgeError('RESPONSE_TOO_LARGE', 'Model response exceeds the local limit.');
+            }
+            return { message };
+          } });
+        clearTimeout(timer); controllers.delete(controller);
+        if (res.destroyed) attachment.detach();
+      }
       const streamId = `chatcmpl-${randomUUID()}`, streamCreated = Math.floor(Date.now() / 1000);
       const sse = delta => `data: ${JSON.stringify({ id: streamId, object: 'chat.completion.chunk', created: streamCreated, model: body.model,
         choices: [{ index: 0, ...delta }] })}\n\n`;
       let streamedText = '';
-      const onContentDelta = body.stream && !body.response_format
+      const onContentDelta = !owned && body.stream && !body.response_format
         ? text => { streamedText += text; if (!res.destroyed && !controller.signal.aborted) res.write(sse({ delta: { content: text }, finish_reason: null })); }
         : undefined;
       if (body.stream) {
@@ -131,14 +155,19 @@ export function createProviderServer({ config, token, relay, pool = new Provider
         // Some clients drop streams whose idle timers only reset on data
         // events (SSE comments do not count). An empty content delta is a
         // protocol-legal no-op for rendering but reads as activity.
-        heartbeat = setInterval(() => { if (!res.destroyed) {
+        heartbeat = setInterval(() => { if (!res.destroyed && !res.writableNeedDrain) {
           res.write(': waiting for CLI model\n\n');
           res.write(sse({ delta: { content: '' }, finish_reason: null }));
         } }, heartbeatMs);
       }
-      const { message } = await relay.complete(body, { signal: controller.signal, onContentDelta, transport: {
-        sessionId: req.headers['x-session-id'], sessionType: req.headers['x-zcode-session-type'],
-      } });
+      let answer;
+      if (attachment) {
+        const outcome = await attachment.outcome;
+        if (outcome.detached) return;
+        if (outcome.error) throw outcome.error;
+        answer = outcome.result;
+      } else answer = await relay.complete(body, { signal: controller.signal, onContentDelta, transport });
+      const { message } = answer;
       const result = completion(message, body.model, streamId);
       if (Buffer.byteLength(JSON.stringify(result)) > MAX_RESPONSE_BYTES) throw new BridgeError('RESPONSE_TOO_LARGE', 'Model response exceeds the local limit.');
       if (controller.signal.aborted) throw new BridgeError('REQUEST_TIMEOUT', 'The request deadline or client connection ended.');
@@ -161,12 +190,14 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       const value = { error: { message: error instanceof BridgeError ? error.message : 'Local provider request failed.', type: 'api_error', code } };
       if (res.headersSent) { if (!res.destroyed) { res.write(`data: ${JSON.stringify(value)}\n\n`); res.end(); } }
       else { if (statusFor(code) === 429) res.setHeader('Retry-After', '15'); send(res, statusFor(code), value); }
-    } finally { clearTimeout(timer); clearInterval(heartbeat); if (controller) controllers.delete(controller); }
+    } finally { attachment?.detach(); clearTimeout(timer); clearInterval(heartbeat); if (controller) controllers.delete(controller); }
   });
   server.requestTimeout = 15000; server.headersTimeout = 10000; server.keepAliveTimeout = 5000; server.maxConnections = 80;
-  server.shutdown = async () => {
+  let stopping;
+  server.shutdown = () => stopping ??= (async () => {
     pool.close(); for (const controller of controllers) controller.abort();
-    await new Promise(resolve => server.close(resolve));
-  };
+    const closed = new Promise(resolve => server.close(resolve));
+    await delegates.shutdown(); await closed;
+  })();
   return server;
 }
