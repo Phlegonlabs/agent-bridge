@@ -38,7 +38,7 @@ export class DelegateRequests {
     }
   }
 
-  attach({ sessionKey, fingerprint, timeoutMs, start, metadata }) {
+  attach({ sessionKey, fingerprint, timeoutMs, start, metadata, workspaceKey }) {
     this.#prune();
     if (this.#closed) throw new BridgeError('CANCELLED', 'The provider is stopping.');
     if (this.#waiters >= this.#limits.limit) throw new BridgeError('QUEUE_FULL', 'Too many connected delegate requests.');
@@ -51,7 +51,7 @@ export class DelegateRequests {
     if (!entry) {
       if (this.#active.size >= this.#limits.limit) throw new BridgeError('QUEUE_FULL', 'Too many owned delegate requests.');
       const controller = new AbortController();
-      const progress = this.statuses.create({ ...metadata, deadlineAt: this.#limits.now() + timeoutMs }, sessionKey);
+      const progress = this.statuses.create({ ...metadata, deadlineAt: this.#limits.now() + timeoutMs }, sessionKey, workspaceKey);
       entry = { fingerprint, controller, progress, waiters: new Set(), outcome: null };
       this.#entries.set(key, entry); this.#active.set(sessionKey, entry);
       controller.signal.addEventListener('abort', () => progress.update({ type: 'stopping' }), { once: true });

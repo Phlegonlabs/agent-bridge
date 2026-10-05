@@ -5,7 +5,7 @@ import path from 'node:path';
 import { bridgeRoot } from './account.mjs';
 import { BridgeError } from './profiles.mjs';
 import { ProviderPool } from './provider-pool.mjs';
-import { ModelRelay, delegationFingerprint } from './provider-relay.mjs';
+import { ModelRelay, delegationFingerprint, delegationCwd } from './provider-relay.mjs';
 import { DelegateRequests, delegateSessionKey } from './delegate-requests.mjs';
 import { claudeDelegateBudget } from './claude-budgets.mjs';
 import { validateChat, completion } from './provider-protocol.mjs';
@@ -13,7 +13,7 @@ import { validateRouteReasoning, resolveModelSelection } from './model-options.m
 import { normalizeClaudeExecution } from './claude-permissions.mjs';
 import { providerConfigPath } from './provider-config-path.mjs';
 import { hash } from './profiles.mjs';
-import { TaskStatuses, taskIdPattern } from './task-progress.mjs';
+import { TaskStatuses, taskIdPattern, workspaceTaskKey } from './task-progress.mjs';
 export const providerState = path.join(bridgeRoot, '.bridge', 'provider');
 export async function localToken(state = providerState) {
   await mkdir(state, { recursive: true, mode: 0o700 });
@@ -115,7 +115,8 @@ export function createProviderServer({ config, token, relay, pool = new Provider
         if (req.url === '/v1/tasks') {
           const sessionKey = req.headers['x-session-id'] === undefined ? undefined :
             delegateSessionKey(req.headers['x-session-id'], req.headers['x-zcode-session-type']);
-          send(res, 200, { schema: 'agent-bridge/tasks/1', tasks: statuses.list(sessionKey) });
+          const workspaceKey = req.headers['x-agent-bridge-workspace'] === undefined ? undefined : workspaceTaskKey(req.headers['x-agent-bridge-workspace']);
+          send(res, 200, { schema: 'agent-bridge/tasks/1', tasks: statuses.list(sessionKey, workspaceKey) });
         } else {
           const taskId = req.url.slice('/v1/tasks/'.length);
           if (!taskIdPattern.test(taskId)) throw new BridgeError('INVALID_TASK_ID', 'Use a UUID task ID.');
@@ -144,6 +145,8 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       const route = config.routes[body.model];
       const selection = resolveModelSelection(route, body.reasoning_effort);
       const transport = { sessionId: req.headers['x-session-id'], sessionType: req.headers['x-zcode-session-type'] };
+      const callerWorkspace = delegationCwd(body);
+      const workspaceKey = callerWorkspace && path.isAbsolute(callerWorkspace) ? workspaceTaskKey(callerWorkspace) : undefined;
       const owned = route.provider === 'claude' && route.mode === 'delegate' && transport.sessionId !== undefined &&
         (route.sessionContinuity || route.execution?.mode === 'workspace-write');
       if (route.provider === 'claude') {
@@ -153,7 +156,7 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       if (owned) {
         const sessionKey = delegateSessionKey(transport.sessionId, transport.sessionType);
         attachment = delegates.attach({ sessionKey, fingerprint: delegationFingerprint(body, selection),
-          metadata: { provider: route.provider, model: body.model },
+          metadata: { provider: route.provider, model: body.model }, workspaceKey,
           timeoutMs: claudeDelegateBudget(config).requestTimeoutMs, start: async (signal, taskProgress) => {
             const { message, evidence } = await relay.complete(body, { signal, transport, progress: taskProgress });
             if (Buffer.byteLength(JSON.stringify(completion(message, body.model))) > MAX_RESPONSE_BYTES) {
@@ -168,7 +171,7 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       if (!owned) {
         const sessionKey = transport.sessionId === undefined ? undefined : delegateSessionKey(transport.sessionId, transport.sessionType);
         const budget = route.provider === 'claude' ? claudeDelegateBudget(config).requestTimeoutMs : config.requestTimeoutMs;
-        progress = statuses.create({ provider: route.provider, model: body.model, deadlineAt: Date.now() + budget }, sessionKey);
+        progress = statuses.create({ provider: route.provider, model: body.model, deadlineAt: Date.now() + budget }, sessionKey, workspaceKey);
         controller.signal.addEventListener('abort', () => progress.update({ type: 'stopping' }), { once: true });
       }
       res.setHeader('X-Agent-Bridge-Task-Id', attachment?.taskId ?? progress.record.taskId);

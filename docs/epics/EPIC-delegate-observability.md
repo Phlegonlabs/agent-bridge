@@ -85,3 +85,11 @@ The regression begins with real first-attempt activity before queueing the next 
 The adapter now uses at most 60 polls with ten-second waits under the existing nine-minute batch deadline.
 A synthetic 32-job test checks combined world calls, reports and phases below 256.
 This avoids depending on unknown installed-host item accounting. Real rendering remains unverified.
+
+2026-10-05 — candidate `0cacbb7` passed 207 offline tests and independent source review.
+Evidence: `.bridge/observability-reviewed-ed8c4539-7ae2-4738-b2ed-0641639b1bce.log`.
+Add a project-directory lookup to make native task matching usable without finding session headers first.
+The directory declared in request context becomes a private normalized hash key.
+The authenticated API and CLI return neither that hash nor the project path.
+Requests without a declared absolute working directory remain unmatched.
+This OBS-004 follow-up adds no new execution or automatic retry behavior.

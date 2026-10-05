@@ -51,7 +51,7 @@ async function fixture(work, fail = false) {
 }
 
 test('subagent task lookup survives disconnect and shows queued, native activity and audited completion', async () => {
-  await fixture(async ({ pool, lookup, request, pending, started, calls }) => {
+  await fixture(async ({ pool, lookup, request, pending, started, calls, state }) => {
     const release = await pool.acquire('claude');
     const controller = new AbortController(), response = await request(controller.signal);
     const id = response.headers.get('x-agent-bridge-task-id'); assert.ok(id);
@@ -67,6 +67,9 @@ test('subagent task lookup survives disconnect and shows queued, native activity
     assert.equal(quiet.deadlineAt, task.deadlineAt);
     assert.doesNotMatch(JSON.stringify(quiet), /PRIVATE_CANARY|workflow-actor|sessionId|command/);
     assert.equal((await lookup('', { 'x-session-id': 'other' })).value.tasks.length, 0);
+    assert.equal((await lookup('', { 'x-agent-bridge-workspace': state })).value.tasks.length, 1);
+    assert.equal((await lookup('', { 'x-agent-bridge-workspace': path.join(state, 'other') })).value.tasks.length, 0);
+    assert.equal((await lookup('', { 'x-agent-bridge-workspace': '../private' })).status, 400);
     assert.equal((await lookup('', { Authorization: 'Bearer wrong' })).status, 401);
     assert.equal((await lookup('', { Origin: 'https://example.test' })).status, 403);
     const joined = await request(); assert.equal(joined.headers.get('x-agent-bridge-task-id'), id);

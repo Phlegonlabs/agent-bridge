@@ -59,16 +59,16 @@ try {
   if (['workflow', 'presets'].includes(command) && (values.provider !== 'zcode' || values.agent || values.model || values.cli || values['expected-model'] || values['cursor-dir'] || values['timeout-ms'])) throw new BridgeError('INVALID_ARGUMENT', 'Workflow routes and deadlines come from the preset.');
   if (values.help || !command) {
     emit({ commands: ['setup', 'profiles', 'doctor', 'login', 'models', 'run', 'presets', 'workflow', 'status'], setup: '--providers codex,claude,cursor --models PROVIDER:MODEL_ID,... --fallback off|CODEX_MODEL [--write-mode workspace-write|read-only] [--port 32147] [--config FILE] [--dry-run]', doctor: '--provider zcode|cursor|claude|codex|all [--live --model MODEL --cwd DIRECTORY]', run: '--agent NAME --cwd DIRECTORY --task-file FILE [--expected-model PROVIDER/MODEL] [--timeout-ms 60000]',
-      status: '[--task-id UUID | --session-id ID --session-type TYPE | --workflow-id UUID] [--config FILE] [--watch --watch-ms 600000 --interval-ms 2000]',
+      status: '[--task-id UUID | --cwd ABSOLUTE_DIRECTORY | --session-id ID --session-type TYPE | --workflow-id UUID] [--config FILE] [--watch --watch-ms 600000 --interval-ms 2000]',
       workflow: '--cwd DIRECTORY (--task TEXT | --task-file FILE | --jobs-file FILE | --jobs-json JSON) [--preset NAME] [--workers explorer,reviewer,cursor] [--parallel-limit 14] [--fallback off|configured] [--trust-workspace] [--run-id UUID]',
       cursor: '--provider cursor --model MODEL_ID --cwd DIRECTORY --task-file FILE [--trust-workspace] [--cursor-dir PACKAGE_DIRECTORY]',
       claude: '--provider claude --model claude-opus-5-5 --cwd DIRECTORY --task-file FILE [--timeout-ms 120000]',
       note: 'ZCode expected-model asserts profile identity. Cursor model selects a native model; Cursor runs in ask mode. Claude delegates one self-contained task to the native Claude Code CLI.' });
   } else if (positionals.length !== 1) throw new BridgeError('INVALID_ARGUMENT', 'Unexpected positional arguments.');
   else if (command === 'status') {
-    if (values.provider !== 'zcode' || values.cwd || values.agent || values['task-file'] || values['timeout-ms'] || values.live) throw new BridgeError('INVALID_ARGUMENT', 'status accepts only lookup, config and watch options.');
+    if (values.provider !== 'zcode' || values.agent || values['task-file'] || values['timeout-ms'] || values.live) throw new BridgeError('INVALID_ARGUMENT', 'status accepts only lookup, config and watch options.');
     if (!values.watch && (values['watch-ms'] !== undefined || values['interval-ms'] !== undefined)) throw new BridgeError('INVALID_ARGUMENT', 'Watch timing requires --watch.');
-    const options = { taskId: values['task-id'], sessionId: values['session-id'], sessionType: values['session-type'], workflowId: values['workflow-id'],
+    const options = { taskId: values['task-id'], sessionId: values['session-id'], sessionType: values['session-type'], workspace: values.cwd, workflowId: values['workflow-id'],
       config: values.config, signal: controller.signal, watchMs: values['watch-ms'] === undefined ? undefined : Number(values['watch-ms']),
       waitMs: values['wait-ms'] === undefined ? undefined : Number(values['wait-ms']),
       intervalMs: values['interval-ms'] === undefined ? undefined : Number(values['interval-ms']) };

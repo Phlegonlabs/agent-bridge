@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { BridgeError } from './profiles.mjs';
+import path from 'node:path';
+import { BridgeError, hash } from './profiles.mjs';
 
 export const terminalStates = new Set(['finished', 'failed', 'cancelled']);
 const lifecycleStates = new Set(['queued', 'starting', 'running', 'finishing', 'stopping']);
@@ -7,6 +8,15 @@ const activityKinds = new Set(['thinking', 'text', 'tool_started', 'tool_finishe
 const safeName = value => typeof value === 'string' && /^[a-zA-Z0-9._-]{1,128}$/.test(value) ? value : null;
 const safeModel = value => typeof value === 'string' && /^[a-zA-Z0-9._/-]{1,128}$/.test(value) ? value : null;
 export const taskIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// The caller's workspace is a lookup key, never a public status field.
+export function workspaceTaskKey(workspace) {
+  if (typeof workspace !== 'string' || workspace.length > 4096 || !path.isAbsolute(workspace)) {
+    throw new BridgeError('INVALID_CWD', 'Status lookup requires an absolute project directory.');
+  }
+  const normalized = path.resolve(workspace);
+  return hash(process.platform === 'win32' ? normalized.toLowerCase() : normalized);
+}
 
 export function publicTaskStatus(value) {
   if (value?.schema !== 'agent-bridge/task-status/1' || !taskIdPattern.test(value.taskId) ||
@@ -109,18 +119,19 @@ export class TaskStatuses {
       }
     }
   }
-  create(metadata, sessionKey) {
+  create(metadata, sessionKey, workspaceKey) {
     this.prune();
     const active = [...this.entries.values()].filter(entry => !terminalStates.has(entry.progress.record.state)).length;
     if (active >= this.limit) throw new BridgeError('QUEUE_FULL', 'Too many observed tasks.');
     const progress = new TaskProgress({ ...metadata, now: this.now });
-    this.entries.set(progress.record.taskId, { progress, sessionKey });
+    this.entries.set(progress.record.taskId, { progress, sessionKey, workspaceKey });
     return progress;
   }
   get(id) { this.prune(); return this.entries.get(id)?.progress.snapshot() ?? null; }
-  list(sessionKey) {
+  list(sessionKey, workspaceKey) {
     this.prune();
-    return [...this.entries.values()].filter(entry => sessionKey === undefined || entry.sessionKey === sessionKey)
+    return [...this.entries.values()].filter(entry => (sessionKey === undefined || entry.sessionKey === sessionKey) &&
+      (workspaceKey === undefined || entry.workspaceKey === workspaceKey))
       .map(entry => entry.progress.snapshot());
   }
 }

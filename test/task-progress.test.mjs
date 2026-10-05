@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TaskProgress, TaskStatuses, notifyProgress } from '../src/task-progress.mjs';
+import { TaskProgress, TaskStatuses, notifyProgress, workspaceTaskKey } from '../src/task-progress.mjs';
+import path from 'node:path';
 import { observeNativeProgress } from '../src/native-progress.mjs';
 
 test('status separates lifecycle, real activity, silence and terminal verification', () => {
@@ -84,4 +85,14 @@ test('a new attempt never attributes the old worker activity or start to its rep
   assert.equal(queued.lastOutputAt, null); assert.equal(queued.runId, null);
   assert.equal(queued.deadlineAt, 9000); assert.equal(queued.acceptedAt, 1000);
   original({ type: 'activity', kind: 'thinking' }); assert.equal(task.snapshot().lastActivityAt, null);
+});
+
+test('workspace matching uses a private normalized key without publishing project paths', () => {
+  const statuses = new TaskStatuses(), workspace = path.join(process.cwd(), 'PRIVATE_CANARY');
+  const key = workspaceTaskKey(workspace);
+  statuses.create({ provider: 'claude' }, 'session', key);
+  assert.equal(statuses.list(undefined, workspaceTaskKey(path.join(workspace, '.'))).length, 1);
+  assert.equal(statuses.list(undefined, workspaceTaskKey(path.dirname(workspace))).length, 0);
+  assert.doesNotMatch(JSON.stringify(statuses.list()), /PRIVATE_CANARY/);
+  assert.throws(() => workspaceTaskKey('../private'), { code: 'INVALID_CWD' });
 });

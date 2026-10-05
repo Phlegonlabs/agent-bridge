@@ -188,6 +188,7 @@ Bridge 會接回原本的任務，切換串流或一次回傳也適用。
 通過驗證的 `/status` 會顯示執行中的 delegate jobs、等待連線及暫存結果數。
 使用 `node bin/bridge.mjs status --watch` 查看個別 workflow actor 與 subagent 請求。
 可用 `--task-id UUID` 或 `--session-id ID --session-type subagent` 篩選。
+使用 `--cwd 絕對專案路徑` 比對呼叫端宣告的工作目錄。
 任務 ID 由回應 header `X-Agent-Bridge-Task-Id` 提供。
 狀態分開顯示排隊、worker 啟動、最後觀察到的原生活動、cleanup 與最終驗證結果。
 Heartbeat 和查詢不更新活動時間；安靜一段時間不會觸發重跑。
