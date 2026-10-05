@@ -11,6 +11,7 @@ import { relayPrompt, correctiveRelayPrompt, parseRelay } from './provider-proto
 import { createEnvelopeContentStream } from './stream-relay.mjs';
 import { resolveModelSelection } from './model-options.mjs';
 import { ClaudeSessions, jsonHash } from './claude-sessions.mjs';
+import { claudeDelegateBudget } from './claude-budgets.mjs';
 
 export async function invokeCli(route, text, { signal, timeoutMs, directory, onPartial, cwd, effort, session, onNativeStarted }) {
   let task = text, transportFile;
@@ -102,7 +103,9 @@ export class ModelRelay {
     const selection = resolveModelSelection(this.config.routes[body.model], body.reasoning_effort);
     const id = randomUUID(), directory = path.join(this.stateDirectory, 'requests', id);
     await mkdir(directory, { recursive: true, mode: 0o700 });
-      const options = { signal, timeoutMs: this.config.attemptTimeoutMs, directory, transport, requestedEffort: body.reasoning_effort };
+    const timeoutMs = this.config.routes[body.model]?.provider === 'claude'
+      ? claudeDelegateBudget(this.config).attemptTimeoutMs : this.config.attemptTimeoutMs;
+    const options = { signal, timeoutMs, directory, transport, requestedEffort: body.reasoning_effort };
     const decision = { route: body.model, reason: 'explicit-model' };
     await writeFile(path.join(directory, 'routing.json'), JSON.stringify({ id, requestedModel: body.model, ...decision,
       requestedEffort: body.reasoning_effort, selectedModel: selection.model, effectiveEffort: selection.effort,

@@ -128,12 +128,14 @@ test('runClaude passes normalized policy, effort, and native session arguments t
     return { exitCode: 0, reason: null, cleanup: { status: 'terminated' } };
   };
   const result = await runClaude({ cwd: process.cwd(), task: 'Inspect the policy arguments.', model,
+    timeoutMs: 4500000,
     claudeBin: process.execPath,
     effort: 'xhigh', session: { id: sessionId, resume: true },
     execution: { mode: 'workspace-write', writeScope: './**', tools: [
       'Read', 'Glob', 'Grep', 'Edit(./**)', 'Write(./**)', 'Bash(npm *)', 'Bash(git status*)'
     ] }, runProcessImpl });
   assert.equal(result.ok, true);
+  assert.ok(calls[0].timeoutMs > 4400000 && calls[0].timeoutMs <= 4500000);
   assert.equal(result.sessionId, sessionId);
   assert.equal(result.requestedEffort, 'xhigh');
   assert.equal(result.toolPolicy.toolNames.join(','), 'Bash,Edit,Glob,Grep,Read,Write');
@@ -162,7 +164,7 @@ test('runClaude validates model, task, and timeout before touching the runtime',
   await assert.rejects(runClaude({ cwd: '.', task: '', model }), { code: 'INVALID_TASK' });
   await assert.rejects(runClaude({ cwd: '.', task: 'x'.repeat(32769), model }), { code: 'INVALID_TASK' });
   await assert.rejects(runClaude({ cwd: '.', task: 'x', model, timeoutMs: 50 }), { code: 'INVALID_TIMEOUT' });
-  await assert.rejects(runClaude({ cwd: '.', task: 'x', model, timeoutMs: 700000 }), { code: 'INVALID_TIMEOUT' });
+  await assert.rejects(runClaude({ cwd: '.', task: 'x', model, timeoutMs: 7200001 }), { code: 'INVALID_TIMEOUT' });
 });
 
 test('runClaude tracks native spawn state through onSpawn and pre-process errors', async () => {

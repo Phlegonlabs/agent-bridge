@@ -92,6 +92,17 @@ Twenty real HTTP disconnects retained one synthetic worker and one recorded side
 Shutdown waited for detached cleanup; ordinary relay disconnects still cancelled work.
 Evidence: `.bridge/http-reconnect-1791184155151/stdout.log`.
 
+2026-10-05 — LT-006 long-budget repair after `cdb3d3e`.
+Claude receives separate 75-minute attempts and 90-minute request deadlines.
+Legacy configurations receive defaults without file migration.
+New setup configurations and the tracked example explicitly record the budgets.
+Codex, Cursor and batch preset budgets retain their existing behavior.
+English and Traditional Chinese README instructions now describe detachment and recovery.
+The native-provider guide describes current deadlines and declared fallback settings.
+Twenty-seven focused budget, adapter, setup and HTTP tests passed, exit 0.
+An HTTP retry retained the original short test deadline.
+Evidence: `.bridge/long-budgets-final-1791184466023/stdout.log`.
+
 Implementation, independent review and final regression remain pending.
 The running provider remains owned by its existing operator.
 WineGlobe remains read-only, including its unrelated untracked `nul` file.

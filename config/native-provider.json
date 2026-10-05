@@ -10,6 +10,10 @@
   },
   "attemptTimeoutMs": 540000,
   "requestTimeoutMs": 1200000,
+  "claudeDelegate": {
+    "attemptTimeoutMs": 4500000,
+    "requestTimeoutMs": 5400000
+  },
   "fallback": {
     "enabled": true,
     "on": [

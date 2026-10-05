@@ -102,7 +102,7 @@ Choose `off` or a selected Codex model ID. The target must exist in the generate
 node bin/bridge.mjs setup --providers codex,claude --models codex:gpt-6.1-sol,claude:claude-opus-5-5 --fallback gpt-6.1-sol --fallback-effort xhigh
 ```
 
-Fallback handles Claude timeout and rate/usage limits after worker cleanup. Codex continues through ZCode's host tools, inspects partial work and preserves the assignment's file/command restrictions. It does not replay the failed Claude turn. Permission denial, cancellation, model mismatch, protocol failure and unconfirmed cleanup do not trigger fallback. Fallback-enabled Claude turns buffer their text until completion. Other provider routes keep their selected model.
+Fallback handles Claude timeout and rate/usage limits after worker cleanup. Codex continues through ZCode's host tools and inspects partial work. It preserves the assignment's file and command restrictions. It does not replay the failed Claude turn. Permission denial, cancellation, model mismatch, protocol failure and unconfirmed cleanup do not trigger fallback. Session-identified Claude turns send heartbeats followed by audited final text. Other provider routes keep their selected model.
 
 ## 4. Start the provider and connect ZCode
 
@@ -173,10 +173,23 @@ The batch workflow accepts explicit independent `{id, worker, task}` jobs or use
 - **Codex images:** write a UTF-8 prompt file, then run `node bin/codex-image.mjs --cwd . --prompt-file PROMPT_FILE`. This uses native Codex image generation and its existing login, with no paid Image API fallback. A verified PNG is copied to a new `generated-images/codex-UUID/image.png` directory. The supplied [ZCode skill](skills/codex-imagegen/SKILL.md) needs your checkout path before installation; reference-image editing is not supported by this entry.
 - **Claude sessions:** completed turns resume the native session; duplicate completed requests use saved results. Workspace/policy changes and uncertain interrupted writes are rejected. Inspect with `node scripts/claude-session-recovery.mjs .bridge/provider/sessions inspect --session-id ID --session-type TYPE`. Recovery requires checking native history, files and process state; see [recovery instructions](docs/native-provider.md).
 - **Updates:** stop your provider after checking active work, pull the repo, run `npm ci --ignore-scripts`, review any catalog changes, then repeat setup or run `node scripts/register-provider.mjs --update`. Use `--config FILE` for custom registration. Restart deliberately; current sessions are not replayed or migrated automatically.
-- **Limits:** global 14, Codex 4, Claude 4, Cursor 12; attempt budget seven minutes and request budget fifteen minutes. These local limits do not account for other apps using your subscriptions. Unsupported reasoning strengths fail explicitly.
+- **Limits:** global 14, Codex 4, Claude 4, Cursor 12. Claude defaults to a 75-minute attempt and a 90-minute request, including queueing. Set `claudeDelegate.attemptTimeoutMs` and `claudeDelegate.requestTimeoutMs` in your provider configuration. Configurations without `claudeDelegate` use these defaults without rewriting existing files. Codex and Cursor retain the generic configured budgets. Batch preset deadlines remain separate. These limits do not account for other apps using your subscriptions. Unsupported reasoning strengths fail explicitly.
 - **Private state:** never publish `.bridge`, `.env` files, CLI credentials, personal profiles or raw transcripts. Windows uses inherited local account permissions. Keep the provider on loopback.
 
 ## Troubleshooting
+
+For long Claude tasks, reconnect with the same session headers, model, effort and request content.
+The bridge attaches identical retries to the existing task, even when switching between streaming and buffered responses.
+Completed retries return the audited result without running Claude again.
+A different active turn returns `SESSION_BUSY`.
+Closing the connection detaches it; the worker continues until completion, its deadline, or authenticated provider shutdown.
+Reconnects do not reset deadlines.
+Provider shutdown waits for worker cleanup.
+After a service crash, unfinished sessions require inspection before recovery.
+The authenticated `/status` endpoint reports active delegate jobs, waiters and retained results.
+Results remain cached for up to 15 minutes, within count and memory limits.
+Completed Claude receipts also support replay after cache expiry or restart.
+HTTP reconnection cannot guarantee exactly-once rendering in the host UI.
 
 | Result | Next step |
 | --- | --- |

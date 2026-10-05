@@ -7,6 +7,7 @@ import { BridgeError } from './profiles.mjs';
 import { ProviderPool } from './provider-pool.mjs';
 import { ModelRelay, delegationFingerprint } from './provider-relay.mjs';
 import { DelegateRequests, delegateSessionKey } from './delegate-requests.mjs';
+import { claudeDelegateBudget } from './claude-budgets.mjs';
 import { validateChat, completion } from './provider-protocol.mjs';
 import { validateRouteReasoning, resolveModelSelection } from './model-options.mjs';
 import { normalizeClaudeExecution } from './claude-permissions.mjs';
@@ -33,6 +34,7 @@ export function validateProviderConfig(config) {
       limit !== null && (!Number.isInteger(limit) || limit < 1 || limit > 14)) fail();
   if (!Number.isInteger(config.attemptTimeoutMs) || config.attemptTimeoutMs < 1000 || config.attemptTimeoutMs > 540000 ||
       !Number.isInteger(config.requestTimeoutMs) || config.requestTimeoutMs < config.attemptTimeoutMs || config.requestTimeoutMs > 1200000) fail();
+  claudeDelegateBudget(config);
   if (!config.routes || typeof config.routes !== 'object' || Array.isArray(config.routes) || Object.keys(config.routes).length > 64) fail();
   for (const [id, route] of Object.entries(config.routes)) {
     validateRouteReasoning(route);
@@ -129,10 +131,14 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       const transport = { sessionId: req.headers['x-session-id'], sessionType: req.headers['x-zcode-session-type'] };
       const owned = route.provider === 'claude' && route.mode === 'delegate' && transport.sessionId !== undefined &&
         (route.sessionContinuity || route.execution?.mode === 'workspace-write');
+      if (route.provider === 'claude') {
+        clearTimeout(timer);
+        timer = setTimeout(() => controller.abort(), claudeDelegateBudget(config).requestTimeoutMs);
+      }
       if (owned) {
         const sessionKey = delegateSessionKey(transport.sessionId, transport.sessionType);
         attachment = delegates.attach({ sessionKey, fingerprint: delegationFingerprint(body, selection),
-          timeoutMs: config.requestTimeoutMs, start: async signal => {
+          timeoutMs: claudeDelegateBudget(config).requestTimeoutMs, start: async signal => {
             const { message } = await relay.complete(body, { signal, transport });
             if (Buffer.byteLength(JSON.stringify(completion(message, body.model))) > MAX_RESPONSE_BYTES) {
               throw new BridgeError('RESPONSE_TOO_LARGE', 'Model response exceeds the local limit.');

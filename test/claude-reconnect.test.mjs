@@ -9,10 +9,11 @@ import { ModelRelay } from '../src/provider-relay.mjs';
 
 function gate() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-async function fixture(work) {
+async function fixture(work, configure = () => {}) {
   const state = await mkdtemp(path.join(tmpdir(), 'bridge-reconnect-'));
   const config = await readProviderConfig(path.join(process.cwd(), 'config/native-provider.json'));
   config.fallback.enabled = false; config.attemptTimeoutMs = 1000; config.requestTimeoutMs = 5000;
+  config.claudeDelegate = { attemptTimeoutMs: 1000, requestTimeoutMs: 5000 }; configure(config);
   const pool = new ProviderPool(config), pending = gate(), began = gate();
   let calls = 0, workerSignal;
   const relay = new ModelRelay(config, pool, async (route, prompt, settings) => {
@@ -92,4 +93,23 @@ test('ordinary relay requests still cancel on HTTP disconnect', async () => {
     await started.promise; controller.abort(); await response.body.cancel().catch(() => {});
     await aborted.promise;
   });
+});
+
+test('HTTP retries cannot extend the Claude request deadline', async () => {
+  await fixture(async ({ request, body, began, relay, pending, calls }) => {
+    const original = relay.invoke;
+    relay.invoke = async (...parameters) => {
+      const settings = parameters[2];
+      settings.signal.addEventListener('abort', () => pending.resolve(), { once: true });
+      return original(...parameters);
+    };
+    const startedAt = Date.now(), controller = new AbortController();
+    const first = await request(body, controller.signal); await began.promise;
+    controller.abort(); await first.body.cancel().catch(() => {});
+    await pause(500);
+    const retry = await request(body); const text = await retry.text();
+    assert.match(text, /REQUEST_TIMEOUT/); assert.doesNotMatch(text, /audited final answer/);
+    assert.ok(Date.now() - startedAt < 1800, 'reattachment must not start a second deadline');
+    assert.equal(calls(), 1);
+  }, config => { config.claudeDelegate.requestTimeoutMs = 1000; });
 });

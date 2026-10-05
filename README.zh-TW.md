@@ -102,7 +102,7 @@ Setup 不改寫受 Git 管理的舊設定，也不遷移既有 sessions。已變
 node bin/bridge.mjs setup --providers codex,claude --models codex:gpt-6.1-sol,claude:claude-opus-5-5 --fallback gpt-6.1-sol --fallback-effort xhigh
 ```
 
-Fallback 在 Claude timeout 或 rate／usage limit 後，先完成 worker cleanup，再讓 Codex 透過 ZCode 工具延續任務。它會先檢查部分完成的工作並保留檔案／指令限制，不重跑失敗的 Claude turn。權限拒絕、取消、模型不符、protocol failure 和未確認的 cleanup 不觸發 fallback。啟用 fallback 的 Claude turn 會暫存文字至完成；其他 provider routes 保留原本選擇的模型。
+Fallback 在 Claude timeout 或 rate／usage limit 後，先完成 worker cleanup，再讓 Codex 透過 ZCode 工具延續任務。它會先檢查部分完成的工作，保留原本的檔案及指令限制，不重跑失敗的 Claude turn。權限拒絕、取消、模型不符、protocol failure 和未確認的 cleanup 不觸發 fallback。帶有 session 識別的 Claude turn 會先送出 heartbeat，再回傳已驗證的最終文字。其他 provider routes 保留原本選擇的模型。
 
 ## 4. 啟動 Provider 並連接 ZCode
 
@@ -173,10 +173,22 @@ Standalone Claude 維持唯讀；可寫執行和持續 session 屬於已設定�
 - **Codex 圖片：** 把描述寫入 UTF-8 prompt 檔案，再執行 `node bin/codex-image.mjs --cwd . --prompt-file PROMPT_FILE`。使用原生 Codex 圖片生成及現有登入，不會改用付費 Image API。已驗證的 PNG 複製至新的 `generated-images/codex-UUID/image.png` 目錄。安裝附帶的 [ZCode skill](skills/codex-imagegen/SKILL.md) 前，要填入你的 checkout 路徑；此入口不支援參考圖片編輯。
 - **Claude sessions：** 已完成 turns 延續原生 session，重複的已完成請求使用儲存結果。工作區／政策改變或未確認的中斷寫入會被拒絕。使用 `node scripts/claude-session-recovery.mjs .bridge/provider/sessions inspect --session-id ID --session-type TYPE` 檢查。Recovery 前必須確認原生歷史、檔案及程序狀態，詳見 [recovery 說明](docs/native-provider.md)。
 - **更新：** 檢查執行中的工作，再停止自己的 provider、pull repo、執行 `npm ci --ignore-scripts`，檢查 catalog 改變，然後重新 setup 或執行 `node scripts/register-provider.mjs --update`。自訂註冊使用 `--config FILE`。明確重新啟動，既有 sessions 不會被自動重跑或遷移。
-- **上限：** 全域 14、Codex 4、Claude 4、Cursor 12；單次 attempt 七分鐘，整個 request 十五分鐘。本機上限不計算其他應用程式消耗的訂閱額度。不支援的 reasoning strength 會明確失敗。
+- **上限：** 全域 14、Codex 4、Claude 4、Cursor 12。Claude 預設單次 attempt 75 分鐘，含排隊的 request 90 分鐘。可在 provider 設定中調整 `claudeDelegate.attemptTimeoutMs` 及 `claudeDelegate.requestTimeoutMs`。未設定時使用這些預設值，不改寫既有檔案。Codex 及 Cursor 保留通用設定中的上限；批次 preset 的期限獨立計算。本機上限不計算其他應用程式消耗的訂閱額度。不支援的 reasoning strength 會明確失敗。
 - **私人資料：** 不要公開 `.bridge`、`.env`、CLI 憑證、個人 profiles 或原始對話。Windows 使用本機帳戶繼承權限。Provider 保持只監聽 loopback。
 
 ## 疑難排解
+
+Claude 長任務重連時，使用相同的 session headers、模型、effort 及請求內容。
+Bridge 會接回原本的任務，切換串流或一次回傳也適用。
+已完成的重複請求會回傳已驗證結果，不會再次執行 Claude。
+同一 session 的其他執行中 turn 會收到 `SESSION_BUSY`。
+關閉連線只會離開等待；worker 會繼續至完成、期限到達，或通過驗證的 provider shutdown。
+重連不會重設期限，provider shutdown 會等待 worker cleanup 完成。
+服務崩潰後，未完成的 session 必須先檢查，再進行 recovery。
+通過驗證的 `/status` 會顯示執行中的 delegate jobs、等待連線及暫存結果數。
+結果最多暫存 15 分鐘，並受數量及記憶體上限限制。
+已完成的 Claude receipt 也能在暫存到期或服務重啟後回傳結果。
+HTTP 重連不能保證主程式畫面只顯示一次結果。
 
 | 結果 | 下一步 |
 | --- | --- |

@@ -10,6 +10,7 @@ import { codexRoutes, cursorRoutes, resolveModelSelection } from './model-option
 import { validateProviderConfig, localToken } from './provider-server.mjs';
 import { localProviderConfig } from './provider-config-path.mjs';
 import { updateProviders, reconcileProviders } from './provider-registration.mjs';
+import { defaultClaudeDelegate } from './claude-budgets.mjs';
 
 export const writableTools = ['Read', 'Glob', 'Grep', 'Edit(./**)', 'Write(./**)',
   ...['npm', 'npx', 'pnpm', 'yarn', 'node', 'python', 'py', 'uv', 'dotnet', 'cargo', 'go'].map(name => `Bash(${name} *)`),
@@ -54,6 +55,7 @@ export function buildSetupConfig({ catalogs, selections, port = 32147, writeMode
   }
   return validateProviderConfig({ version: 1, port: Number(port), globalLimit: 14,
     limits: { zcode: 2, cursor: 12, claude: 4, codex: 4 }, attemptTimeoutMs: 420000, requestTimeoutMs: 900000,
+    claudeDelegate: { ...defaultClaudeDelegate },
     fallback: { enabled: fallback !== 'off', on: ['TIMEOUT', 'RATE_LIMITED'], reasoningEffort: fallbackEffort, routes: fallbackRoutes }, routes });
 }
 

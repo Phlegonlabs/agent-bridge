@@ -59,7 +59,7 @@ async function startClaude({ cwd, task, model, effort, execution, session, newSe
   timeoutMs = 60000, signal, claudeBin, onTextDelta, onSpawn, runProcessImpl = runProcess }, nativeState) {
   if (typeof model !== 'string' || !model || model === 'auto') throw new BridgeError('CLAUDE_MODEL_REQUIRED', 'Choose an explicit Claude model id, for example claude-opus-5-5.');
   if (typeof task !== 'string' || !task.trim() || Buffer.byteLength(task) > 32768) throw new BridgeError('INVALID_TASK', 'Task must be 1..32768 bytes.');
-  if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 600000) throw new BridgeError('INVALID_TIMEOUT', 'Timeout must be 100..600000 ms.');
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 7200000) throw new BridgeError('INVALID_TIMEOUT', 'Timeout must be 100..7200000 ms.');
   const deadline = Date.now() + timeoutMs;
   const workspace = await realpath(cwd);
   if (!(await stat(workspace)).isDirectory()) throw new BridgeError('INVALID_CWD', 'Workspace must be a directory.');
