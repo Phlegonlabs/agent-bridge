@@ -113,3 +113,10 @@ Real HTTP fixtures use a directory containing Chinese characters and check match
 All 208 offline tests passed after this repair.
 Evidence: `.bridge/observability-unicode-5329c689-85e8-467a-9117-4b02eaa7097f.log`.
 The reviewer accepted this repair; optional workspace metadata admission needs a separate follow-up.
+
+2026-10-05 — after `64808e0`, keep optional status metadata outside relay request admission.
+An oversized caller workspace remains unmatched instead of rejecting a valid Codex or Cursor request.
+Explicit project lookup retains strict validation. A regression checks both relays reach execution and return their result.
+All 209 offline tests passed after this repair.
+Evidence: `.bridge/observability-admission-ad68c5dd-618a-490e-b23f-7ad9785bd0a8.log`.
+Independent repair review remains pending. No provider process or external state changed.

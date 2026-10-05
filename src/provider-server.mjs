@@ -149,7 +149,8 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       const selection = resolveModelSelection(route, body.reasoning_effort);
       const transport = { sessionId: req.headers['x-session-id'], sessionType: req.headers['x-zcode-session-type'] };
       const callerWorkspace = delegationCwd(body);
-      const workspaceKey = callerWorkspace && path.isAbsolute(callerWorkspace) ? workspaceTaskKey(callerWorkspace) : undefined;
+      const workspaceKey = callerWorkspace && callerWorkspace.length <= 4096 && path.isAbsolute(callerWorkspace)
+        ? workspaceTaskKey(callerWorkspace) : undefined;
       const owned = route.provider === 'claude' && route.mode === 'delegate' && transport.sessionId !== undefined &&
         (route.sessionContinuity || route.execution?.mode === 'workspace-write');
       if (route.provider === 'claude') {

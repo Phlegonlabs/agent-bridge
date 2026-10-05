@@ -47,7 +47,7 @@ async function fixture(work, fail = false) {
   };
   const request = signal => fetch(`${base}/v1/chat/completions`, { method: 'POST', headers,
     body: JSON.stringify(body), signal: signal ?? AbortSignal.timeout(4000) });
-  try { await work({ state, config, pool, server, base, token, headers, body, lookup, request, pending, started, calls: () => calls }); }
+  try { await work({ state, config, pool, relay, server, base, token, headers, body, lookup, request, pending, started, calls: () => calls }); }
   finally { pending.resolve(); await server.shutdown(); await rm(state, { recursive: true, force: true }); }
 }
 
@@ -89,6 +89,29 @@ test('native completion cannot certify a failed audit', async () => {
     const task = (await lookup(`/${id}`)).value.tasks[0];
     assert.equal(task.state, 'failed'); assert.equal(task.actualModel, null);
   }, true);
+});
+
+test('optional workspace status metadata does not reject valid relay requests', async () => {
+  await fixture(async ({ config, relay, base, headers, lookup }) => {
+    let calls = 0;
+    relay.complete = async body => {
+      calls++;
+      return { message: { role: 'assistant', content: 'relay answer' }, evidence: { actualModel: body.model } };
+    };
+    for (const provider of ['codex', 'cursor']) {
+      const model = Object.keys(config.routes).find(id => config.routes[id].provider === provider);
+      assert.ok(model);
+      const workspace = path.join(process.cwd(), 'x'.repeat(4097));
+      const response = await fetch(`${base}/v1/chat/completions`, { method: 'POST', headers,
+        body: JSON.stringify({ model, messages: [{ role: 'system', content: `working directory: ${workspace}` },
+          { role: 'user', content: 'relay task' }] }), signal: AbortSignal.timeout(2000) });
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).choices[0].message.content, 'relay answer');
+    }
+    assert.equal(calls, 2);
+    const tasks = (await lookup()).value.tasks;
+    assert.equal(tasks.length, 2); assert.ok(tasks.every(task => task.state === 'finished'));
+  });
 });
 
 test('status client reads existing credentials privately and never creates a token', async () => {
