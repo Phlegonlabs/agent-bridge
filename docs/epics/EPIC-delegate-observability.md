@@ -1,6 +1,6 @@
 # Delegate observability
 
-Status: implemented locally; activation and live validation pending.
+Status: published and active locally; desktop long-task validation pending.
 
 The owner requested visible execution checks for workflows and subagents on 2026-10-05.
 The baseline is `2a555b54bb443c1fc35d1e9f2270b50c5200aa7d` on `codex/harness-refresh-0.61.0`.
@@ -131,3 +131,29 @@ This closeout changes documentation only. OBS-001 through OBS-006 have local syn
 The working branch remains `codex/harness-refresh-0.61.0`. No provider activation or publication occurred in this round.
 Installed ZCode rendering, authenticated long-task activity and new three-platform CI remain pending.
 The next activation owner must load this source before using its native task status endpoint.
+
+2026-10-05 — the owner authorized commit, push and deployment, then selected waiting for active tasks before restart.
+This supersedes the earlier no-publication and no-activation scope for this action.
+The clean candidate was `7549d9a2225eff22176268216ef310ac574d1878` on `codex/harness-refresh-0.61.0`.
+Its execution source matches the reviewed `288fa52`; its additional commit changes documentation only.
+Eleven pending commits passed a bounded credential-pattern and private-path scan with no findings.
+The remote branch advanced from `2a555b5` to exact candidate `7549d9a`, confirmed by remote readback.
+Windows, macOS and Linux each passed 209 tests in [CI run 37298333394](https://github.com/Phlegonlabs/agent-bridge/actions/runs/37298333394).
+
+The initial observation had two active requests, including one Claude delegate.
+The deployment waited until active, queued and delegate counts were zero.
+Authenticated shutdown returned 202. Old PID 34560 and its recorded children exited before replacement startup.
+The replacement started at `2026-10-05T10:50:01.1591640Z`, runtime PID 8260, on port 32147.
+Volta launcher PID 2104 started intermediary PID 22584, which started the runtime.
+The first port check expected the launcher PID and failed. An ancestry check confirmed the actual runtime without another restart.
+Separate private records retain the launcher and runtime identities. The finite idle waiter exited.
+The requested persistent provider remains active until owner shutdown.
+
+Health is ready and matches configuration SHA-256 `88691397b0719435199f28a4163f5aeb2b0a50b1a0f96c48b36fecf966bd2626`.
+Authenticated task status returned the new schema and observed a host-submitted Codex task as running.
+Model listing returned 17 routes. Unauthenticated task status returned 401.
+The project-filter CLI succeeded; no current task matched the WineGlobe directory at that observation.
+No task was manually replayed, and no account or session configuration was migrated.
+Evidence: `.bridge/observability-deploy-070b6a6e-7d49-41f6-97c8-b34ad4458df1/`.
+Real 60-minute completion and installed ZCode workflow progress rendering remain unverified.
+Harness 0.61.0 shared rules remain current by meaning. Loaded skill identity remains unobserved.

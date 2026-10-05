@@ -14,12 +14,16 @@ Connection heartbeats do not count as worker activity. Terminal success still re
 | Workflow observation | Atomic snapshots, final flushing and bounded polling passed. The saved workflow ran against a synthetic facade. |
 | Privacy | Tests checked authentication, session/project filtering, Unicode paths and payload exclusion. Project paths and hashes do not appear in status responses. |
 | Independent source review | Native reviewer accepted this candidate after two bounded delta repairs. The reviewer ran no tests. |
-| Three-platform CI | This candidate has not been pushed. Earlier CI results below cover earlier source only. |
-| Running service | This change has not been activated. The previously installed provider remains separate from this candidate. |
+| Three-platform CI | Windows, macOS and Linux each passed 209 tests at `7549d9a2225eff22176268216ef310ac574d1878` in [CI run 37298333394](https://github.com/Phlegonlabs/agent-bridge/actions/runs/37298333394). Its execution source matches the reviewed candidate. |
+| Running service | Runtime PID 8260 loaded `7549d9a` on port 32147 after idle shutdown. Health, authenticated task lookup, model listing and unauthorized lookup checks passed. |
 | Desktop/account validation | Real long-task activity and installed ZCode concurrent polling/rendering remain unverified. |
 
 Private test evidence: `.bridge/observability-admission-ad68c5dd-618a-490e-b23f-7ad9785bd0a8.log`.
 The [observability record](epics/EPIC-delegate-observability.md) retains scope, review and remaining obligations.
+Private deployment evidence: `.bridge/observability-deploy-070b6a6e-7d49-41f6-97c8-b34ad4458df1/live-verification.json`.
+The provider remains active by owner request. A host-submitted Codex task appeared as running after restart.
+The WineGlobe project lookup succeeded but matched no current task at that observation.
+These observations do not certify useful worker activity or final task completion.
 
 ## Claude long-task repair — 2026-10-05
 
@@ -44,7 +48,7 @@ The [repair record](epics/EPIC-claude-long-task-reliability.md) retains checkpoi
 The public branch is `codex/harness-refresh-0.61.0`; it has not been merged into `main`.
 Shutdown cancelled an active Codex request because the host kept submitting work.
 The old provider and its recorded worker exited before replacement startup.
-The replacement remains running until the owner stops it.
+The owner requested persistent operation. The observability deployment above later replaced this provider.
 
 ## Public setup verification — 2026-10-04
 
