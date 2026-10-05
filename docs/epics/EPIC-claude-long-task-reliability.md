@@ -103,6 +103,13 @@ Twenty-seven focused budget, adapter, setup and HTTP tests passed, exit 0.
 An HTTP retry retained the original short test deadline.
 Evidence: `.bridge/long-budgets-final-1791184466023/stdout.log`.
 
+2026-10-05 — LT-004 validation follow-up after `fa53903`.
+The 188-test regression passed at that candidate.
+A new isolated probe found lost PID evidence when callback result validation failed before the spawn hook.
+Capture PID evidence before validation so oversized results retain uncertainty.
+The probe failed before repair and passed afterward; 38 focused session/fallback tests passed.
+Evidence: `.bridge/pid-validation-probe-1791184654651/stdout.log` and `.bridge/pid-validation-repair-1791184673906/stdout.log`.
+
 Implementation, independent review and final regression remain pending.
 The running provider remains owned by its existing operator.
 WineGlobe remains read-only, including its unrelated untracked `nul` file.

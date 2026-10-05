@@ -204,6 +204,17 @@ test('worker PID evidence blocks retries when the spawn hook was omitted', async
   });
 });
 
+test('PID evidence survives callback result validation failures', async () => {
+  await withState(async directory => {
+    const sessions = new ClaudeSessions(directory);
+    const invalid = async input => ({ ok: true, sessionId: input.session.id,
+      response: 'x'.repeat(1024 * 1024), execution: { pid: 42 } });
+    await assert.rejects(sessions.run(request(), invalid), { code: 'RESULT_TOO_LARGE' });
+    assert.equal((await sessions.inspect(request())).status, 'uncertain');
+    await assert.rejects(sessions.run(request(), invalid), { code: 'SESSION_RECOVERY_REQUIRED' });
+  });
+});
+
 test('legacy automatic resumption needs inspection and preserves original bytes', async () => {
   await withState(async directory => {
     const sessions = new ClaudeSessions(directory);

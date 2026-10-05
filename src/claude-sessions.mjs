@@ -262,10 +262,10 @@ export class ClaudeSessions {
         const result = await callback({ session: { id: nativeSessionId, resume },
           onNativeStarted: () => { executionStarted = true; },
           priorContext: receipt?.turns?.at(-1)?.context ?? null });
-        this.#validateResult(result);
         const spawnEvidence = executionStarted ||
-          Number.isInteger(result.execution?.pid) && result.execution.pid > 0;
+          Number.isInteger(result?.execution?.pid) && result.execution.pid > 0;
         executionStarted = Boolean(spawnEvidence);
+        this.#validateResult(result);
         if (result.ok && result.sessionId !== nativeSessionId) {
           throw new BridgeError('SESSION_MISMATCH', 'The Claude worker did not use the assigned native session.');
         }
