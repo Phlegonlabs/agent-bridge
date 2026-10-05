@@ -72,7 +72,7 @@ for (const code of ['TIMEOUT', 'RATE_LIMITED']) test(`Claude ${code} continues w
   }, code);
 });
 
-test('a machine-killed Claude timeout keeps the session on Claude for the next turn', async () => {
+test('a killed Claude timeout preserves the declared handoff after partial writes', async () => {
   await fixture(async ({ relay, calls, body, options, state }) => {
     const original = relay.invoke;
     let claudeAttempts = 0;
@@ -94,12 +94,11 @@ test('a machine-killed Claude timeout keeps the session on Claude for the next t
     assert.equal(first.evidence.fallbackUsed, true);
     assert.match(first.message.content, /gpt-6\.1-sol/);
     const receipt = await relay.sessions.inspect({ sessionId: 'fallback-session', sessionType: 'subagent' });
-    assert.equal(receipt.status, 'resumable');
-    assert.deepEqual((await readdir(state)).filter(name => name.startsWith('fallback-')), [],
-      'no permanent handoff for a machine-killed worker');
+    assert.equal(receipt.status, 'uncertain');
+    assert.equal((await readdir(state)).filter(name => name.startsWith('fallback-')).length, 1);
     const next = await relay.complete({ ...body, messages: [...body.messages, { role: 'user', content: 'Next step.' }] }, options);
-    assert.equal(claudeAttempts, 2);
-    assert.equal(next.message.content, 'resumed Claude work');
+    assert.equal(claudeAttempts, 1);
+    assert.equal(next.evidence.selected, target);
   }, 'TIMEOUT');
 });
 

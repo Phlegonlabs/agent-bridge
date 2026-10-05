@@ -5,7 +5,7 @@ Status: in_progress
 ## Problem And Baseline
 
 The owner needs 30–60 minute Claude tasks to survive HTTP reconnects.
-Six recorded executions reached the nine-minute deadline while Claude still emitted events.
+Five Claude executions and one Codex execution reached the nine-minute deadline.
 Confirmed process termination does not prove that earlier writes were undone.
 
 Repository: `agent-bridge`; branch: `codex/harness-refresh-0.61.0`.
@@ -63,6 +63,16 @@ Loaded Harness identity is unknown; installed Harness is 0.61.0.
 Shared AGENTS rules match its template by meaning, with the intentional deployment paragraph retained.
 
 ## Results And Remaining Work
+
+2026-10-05 — LT-004 working-tree repair based on `72f3835`.
+Post-spawn failures retain uncertainty even after confirmed process cleanup.
+Legacy automatic resumable receipts require inspection; their original files remain unchanged on load.
+Worker PID evidence also blocks retries when the spawn hook was omitted.
+Existing fallback handoffs persist after interrupted writes; no fallback policy changed.
+Focused session and fallback tests passed: 34 tests, exit 0.
+Evidence: `.bridge/session-repair-1791183836888/stdout.log`.
+WineGlobe evidence identifies five Claude timeouts and one Codex timeout.
+The inspected traces do not establish hundreds of persisted reconnect notices.
 
 Implementation, independent review and final regression remain pending.
 The running provider remains owned by its existing operator.

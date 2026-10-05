@@ -162,7 +162,7 @@ test('a genuine post-spawn failure leaves the session uncertain', async () => {
   });
 });
 
-test('a machine-killed worker leaves the session resumable', async () => {
+test('a machine-killed worker retains uncertainty and cannot replay writes', async () => {
   await withState(async directory => {
     const sessions = new ClaudeSessions(directory);
     let calls = 0;
@@ -172,13 +172,10 @@ test('a machine-killed worker leaves the session resumable', async () => {
       throw Object.assign(new BridgeError('TIMEOUT', 'attempt timed out'), { worker: { ok: false, code: 'TIMEOUT',
         execution: { cleanup: { status: 'terminated', survivors: [] } } } });
     };
-    await assert.rejects(sessions.run(request(), killed), { code: 'TIMEOUT' });
-    assert.equal((await sessions.inspect(request())).status, 'resumable');
-    const resumed = await sessions.run(request({ fingerprint: 'after-kill' }), async input => {
-      assert.equal(input.session.resume, true);
-      return worker(input, 'resumed work');
-    });
-    assert.equal(resumed.ok, true);
+    const turn = request({ fingerprint: 'killed-turn' });
+    await assert.rejects(sessions.run(turn, killed), { code: 'TIMEOUT' });
+    assert.equal((await sessions.inspect(request())).status, 'uncertain');
+    await assert.rejects(sessions.run(turn, killed), { code: 'SESSION_RECOVERY_REQUIRED' });
     assert.equal(calls, 1);
   });
   await withState(async directory => {
@@ -191,6 +188,38 @@ test('a machine-killed worker leaves the session resumable', async () => {
     await assert.rejects(sessions.run(request(), unconfirmed), { code: 'TIMEOUT' });
     await assert.rejects(sessions.run(request({ fingerprint: 'retry' }), unconfirmed), { code: 'SESSION_RECOVERY_REQUIRED' });
     assert.equal((await sessions.inspect(request())).status, 'uncertain');
+  });
+});
+
+test('worker PID evidence blocks retries when the spawn hook was omitted', async () => {
+  await withState(async directory => {
+    const sessions = new ClaudeSessions(directory);
+    const killed = async () => {
+      throw Object.assign(new BridgeError('CANCELLED', 'cancelled'), { worker: {
+        execution: { pid: 42, cleanup: { status: 'terminated_process_group', survivors: [] } },
+      } });
+    };
+    await assert.rejects(sessions.run(request(), killed), { code: 'CANCELLED', nativeExecutionStarted: true });
+    await assert.rejects(sessions.run(request(), killed), { code: 'SESSION_RECOVERY_REQUIRED' });
+  });
+});
+
+test('legacy automatic resumption needs inspection and preserves original bytes', async () => {
+  await withState(async directory => {
+    const sessions = new ClaudeSessions(directory);
+    await sessions.run(request(), async input => worker(input));
+    const receipt = await sessions.inspect(request());
+    const file = path.join(directory, 'keys', `${receipt.keyHash}.json`);
+    const legacy = JSON.stringify({ ...receipt, status: 'resumable', failure: { code: 'TIMEOUT' } });
+    await writeFile(file, legacy);
+    assert.equal((await sessions.inspect(request())).status, 'uncertain');
+    await assert.rejects(sessions.run(request(), async input => worker(input)), { code: 'SESSION_RECOVERY_REQUIRED' });
+    assert.equal(await readFile(file, 'utf8'), legacy);
+    const recovered = await sessions.recover({ ...request(), inspected: true,
+      expectedNativeSessionId: receipt.nativeSessionId });
+    assert.equal(await readFile(recovered.backup, 'utf8'), legacy);
+    assert.equal((await sessions.inspect(request())).status, 'resumable');
+    assert.equal((await sessions.run(request(), async input => worker(input))).ok, true);
   });
 });
 

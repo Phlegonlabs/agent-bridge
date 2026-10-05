@@ -214,9 +214,8 @@ export class ModelRelay {
         cwd: workspace, policyHash, execution: route.execution ?? 'read-only', at: new Date().toISOString() };
       await writeFile(path.join(options.directory, 'attempt-1.json'), JSON.stringify({ route: decision.route,
         ok: false, code: error.code, runId: saved.sourceRunId }), { flag: 'wx', mode: 0o600 });
-      // A machine-killed worker leaves a resumable session, so the next turn
-      // returns to Claude; only persist the handoff when it cannot.
-      if (handoffFile && !error.sessionResumable) {
+      // Keep the declared handoff: terminated processes may have written files.
+      if (handoffFile) {
         try { await writeFile(handoffFile, JSON.stringify(saved), { flag: 'wx' }); }
         catch (writeError) { if (writeError.code !== 'EEXIST') throw writeError; }
       }

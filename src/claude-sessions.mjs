@@ -121,6 +121,10 @@ export class ClaudeSessions {
         (turn.status !== 'completed' && turn.status !== 'uncertain') || !validTurnContext(turn.context))) {
       throw new BridgeError('SESSION_STATE_INVALID', 'Claude session state did not match its schema.');
     }
+    // Earlier releases marked killed workers resumable without inspecting writes.
+    // Interpret those receipts safely without changing their original bytes.
+    if (receipt.status === 'resumable' && !receipt.recoveredAt &&
+        ['TIMEOUT', 'CANCELLED'].includes(receipt.failure?.code)) receipt.status = 'uncertain';
     return receipt;
   }
 
@@ -261,6 +265,7 @@ export class ClaudeSessions {
         this.#validateResult(result);
         const spawnEvidence = executionStarted ||
           Number.isInteger(result.execution?.pid) && result.execution.pid > 0;
+        executionStarted = Boolean(spawnEvidence);
         if (result.ok && result.sessionId !== nativeSessionId) {
           throw new BridgeError('SESSION_MISMATCH', 'The Claude worker did not use the assigned native session.');
         }
@@ -291,20 +296,17 @@ export class ClaudeSessions {
         return result;
       } catch (error) {
         const code = error instanceof BridgeError ? error.code : 'CALLBACK_FAILED';
+        executionStarted ||= error.nativeStarted === true || error.nativeExecutionStarted === true ||
+          error.worker?.nativeStarted === true ||
+          Number.isInteger(error.worker?.execution?.pid) && error.worker.execution.pid > 0;
+        if (executionStarted) error.nativeExecutionStarted = true;
         if (!executionStarted) {
           if (receipt) await this.#writeAtomic(this.#statePath(keyHash), receipt);
           else await unlink(this.#statePath(keyHash)).catch(() => {});
         } else {
-          // A machine timeout or cancellation whose process tree was reaped
-          // leaves no worker behind: the native session can be resumed next
-          // turn instead of requiring manual recovery.
-          const cleanup = error?.worker?.execution?.cleanup;
-          const machineKilled = (code === 'TIMEOUT' || code === 'CANCELLED') &&
-            cleanup?.status === 'terminated' && Array.isArray(cleanup.survivors) && cleanup.survivors.length === 0;
-          if (machineKilled) error.sessionResumable = true;
           await this.#writeAtomic(this.#statePath(keyHash), {
             ...running,
-            status: machineKilled ? 'resumable' : 'uncertain',
+            status: 'uncertain',
             failure: { code, at: new Date().toISOString() },
           }).catch(() => {});
         }
