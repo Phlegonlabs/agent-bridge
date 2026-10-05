@@ -88,10 +88,10 @@ const execution = Promise.resolve(world.run("node", commandArgs, { timeoutMs: 60
 );
 let progressReports = 0;
 let lastSummary = "";
-// Reports are bounded below the host's 256-item cap. Polling never dispatches workers.
-for (let observation = 0; observation < 300 && !executionFinished; observation++) {
+// Bound both reports and world.run nodes. A batch deadline is at most nine minutes.
+for (let observation = 0; observation < 60 && !executionFinished; observation++) {
   const status = await world.run("node", ["bin/bridge.mjs", "status", "--workflow-id=" + workflowId,
-    "--wait-ms=2000"], { timeoutMs: 10000 });
+    "--wait-ms=10000"], { timeoutMs: 15000 });
   if (status.exitCode !== 0) continue;
   const snapshot = JSON.parse(status.stdout) as {
     available: boolean; workflowState?: string; observationAgeMs?: number;
@@ -102,7 +102,7 @@ for (let observation = 0; observation < 300 && !executionFinished; observation++
   const summary = JSON.stringify(snapshot.tasks.map(task => ({ id: task.jobId, state: task.state,
     attempt: task.attempt, activity: task.lastActivityKind, code: task.code })));
   // Report changed state/kind, plus periodic activity ages during quiet waits.
-  if ((summary !== lastSummary || observation % 15 === 0) && progressReports < 128) {
+  if ((summary !== lastSummary || observation % 3 === 0) && progressReports < 60) {
     report({ workflowId, executionStatus: snapshot.tasks, observation: "recorded-workflow",
       observationAgeMs: snapshot.observationAgeMs });
     lastSummary = summary; progressReports++;

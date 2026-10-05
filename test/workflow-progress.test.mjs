@@ -112,3 +112,31 @@ test('saved workflow reports status while execution is pending and preserves fin
   assert.equal(reports.find(entry => entry.value.workflowId).value.workflowId, runId);
   assert.equal(reports.at(-1).value.response, 'done');
 });
+
+test('saved workflow bounds native calls and reports for all 32 jobs', async () => {
+  const source = await readFile('.zcode/workflows/model-bridge.dwf.ts', 'utf8');
+  const script = stripTypeScriptTypes(`async function scenario(args, world, phase, report, agent) {\n${source}\n}`, { mode: 'strip' });
+  const run = new Function(`${script}\nreturn scenario;`)();
+  const selected = await preset(), worker = Object.keys(selected.preset.workers)[0], pending = gate();
+  const jobs = Array.from({ length: 32 }, (_, index) => ({ id: `job-${index}`, worker, task: 'inspect' }));
+  let polls = 0, calls = 0, reports = 0, phases = 0;
+  const world = { async run(_command, commandArguments, options) {
+    calls++;
+    if (commandArguments[0] === '-e') return { exitCode: 0, stdout: randomUUID() };
+    if (commandArguments[1] === 'presets') return { exitCode: 0, stdout: JSON.stringify({ defaultPreset: selected.name, presets: { [selected.name]: selected.preset } }) };
+    if (commandArguments[1] === 'workflow') {
+      await pending.promise;
+      return { exitCode: 0, stdout: JSON.stringify({ ok: true, preset: selected.name, parallelLimit: 1, peakParallel: 1,
+        fallbackEnabled: false, logs: 'synthetic', jobs: jobs.map(job => ({ ...job, ok: true, actualModel: 'synthetic',
+          response: 'done', responseTruncated: false, fallbackUsed: false })) }) };
+    }
+    polls++;
+    assert.ok(commandArguments.includes('--wait-ms=10000')); assert.equal(options.timeoutMs, 15000);
+    if (polls === 60) pending.resolve();
+    return { exitCode: 0, stdout: JSON.stringify({ available: true,
+      tasks: jobs.map(job => ({ jobId: job.id, state: polls % 2 ? 'starting' : 'running', attempt: 1,
+        lastActivityAt: null, lastActivityKind: null, lastActivityAgeMs: null, code: null })) }) };
+  } };
+  await run({ task: 'inspect', jobs }, world, () => { phases++; }, () => { reports++; }, () => {});
+  assert.equal(polls, 60); assert.ok(calls + reports + phases < 256);
+});

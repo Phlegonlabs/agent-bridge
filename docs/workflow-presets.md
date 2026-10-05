@@ -46,7 +46,9 @@ The CLI writes sanitized progress to stderr; stdout remains one final JSON resul
 Workflow snapshots are private files under `.bridge/workflows/<UUID>/status.json`.
 The saved workflow reports its UUID before execution and polls status while the batch runs.
 Its intermediate reports show job states and last observed activity, without worker content.
-Reports are bounded below ZCode's item limit. Existing native actor views may still show final answers only.
+Polling uses at most 60 native calls, ten seconds apart, within the existing nine-minute batch deadline.
+Reports and calls remain below 256 combined items for 32 jobs.
+Existing native actor views may still show final answers only.
 
 Use the UUID to check a batch independently:
 

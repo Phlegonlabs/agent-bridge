@@ -80,3 +80,8 @@ A focused regression observes stopping through cleanup and recovery-required fai
 A replacement attempt clears prior worker start, output and activity observations.
 Task admission and deadline remain unchanged. Stale callbacks still cannot alter the replacement attempt.
 The regression begins with real first-attempt activity before queueing the next provider.
+
+2026-10-05 — after `08a8429`, bound native workflow monitoring calls as well as reports.
+The adapter now uses at most 60 polls with ten-second waits under the existing nine-minute batch deadline.
+A synthetic 32-job test checks combined world calls, reports and phases below 256.
+This avoids depending on unknown installed-host item accounting. Real rendering remains unverified.
