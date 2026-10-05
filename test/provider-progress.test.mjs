@@ -8,6 +8,7 @@ import { ProviderPool } from '../src/provider-pool.mjs';
 import { ModelRelay } from '../src/provider-relay.mjs';
 import { BridgeError } from '../src/profiles.mjs';
 import { readTaskStatus, watchTaskStatus } from '../src/task-status-client.mjs';
+import { DelegateRequests } from '../src/delegate-requests.mjs';
 
 function gate() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -106,4 +107,23 @@ test('finite status watch stops at a terminal task without dispatching work', as
   await watchTaskStatus({ taskId: '00000000-0000-4000-8000-000000000000', watchMs: 1000 }, value => emitted.push(value),
     async () => { reads++; return { available: true, tasks: [{ state: 'finished' }] }; });
   assert.equal(reads, 1); assert.equal(emitted.length, 1);
+});
+
+test('deadline status retains post-spawn recovery evidence while cleanup settles', async () => {
+  const requests = new DelegateRequests(), cleaning = gate(), cleaned = gate();
+  try {
+    const attachment = requests.attach({ sessionKey: 'synthetic-session', fingerprint: 'synthetic-turn', timeoutMs: 20,
+      metadata: { provider: 'claude', model: 'opus' }, start: async (signal, progress) => {
+        progress.beginAttempt({ provider: 'claude', model: 'opus' })({ type: 'running' });
+        await new Promise(resolve => signal.addEventListener('abort', resolve, { once: true }));
+        cleaning.resolve(); await cleaned.promise;
+        throw Object.assign(new BridgeError('CANCELLED', 'Synthetic worker cancelled.'), { nativeExecutionStarted: true });
+      } });
+    await cleaning.promise;
+    assert.equal(requests.statuses.get(attachment.taskId).state, 'stopping');
+    cleaned.resolve(); const outcome = await attachment.outcome;
+    assert.equal(outcome.error.code, 'REQUEST_TIMEOUT');
+    const task = requests.statuses.get(attachment.taskId);
+    assert.equal(task.state, 'failed'); assert.equal(task.recoveryRequired, true);
+  } finally { cleaned.resolve(); await requests.shutdown(); }
 });

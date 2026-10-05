@@ -69,3 +69,9 @@ Evidence: `.bridge/observability-regression-f1957095-fc16-468f-afcd-1915c87754c3
 A follow-up isolated probe found an unhandled rejection from asynchronous status observers.
 The notification helper now handles rejected observer promises without changing worker execution.
 A regression test checks this isolation. Final review and repaired-candidate regression remain pending.
+
+2026-10-05 — `18cb3a7` passed all 204 offline tests.
+Evidence: `.bridge/observability-final-d2b88524-69c6-413a-bf72-650e081487f1.log`.
+Independent review found that deadline substitution discarded native recovery evidence.
+The registry now retains that evidence before selecting the public cancellation/deadline code.
+A focused regression observes stopping through cleanup and recovery-required failure afterward.

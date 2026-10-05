@@ -64,8 +64,8 @@ export class DelegateRequests {
         clearTimeout(timer);
         const retryableAdmission = !controller.signal.aborted && outcome.error?.nativeExecutionStarted === false &&
           ['QUEUE_FULL', 'RATE_LIMITED', 'PROVIDER_UNAVAILABLE'].includes(outcome.error.code);
-        if (controller.signal.aborted) outcome = { error: controller.signal.reason };
         const recoveryRequired = outcome.error?.nativeExecutionStarted === true;
+        if (controller.signal.aborted) outcome = { error: controller.signal.reason };
         if (outcome.error) {
           const error = outcome.error;
           outcome = { error: new BridgeError(error instanceof BridgeError ? error.code : 'PROVIDER_ERROR',
