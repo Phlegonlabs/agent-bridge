@@ -69,10 +69,18 @@ Post-spawn failures retain uncertainty even after confirmed process cleanup.
 Legacy automatic resumable receipts require inspection; their original files remain unchanged on load.
 Worker PID evidence also blocks retries when the spawn hook was omitted.
 Existing fallback handoffs persist after interrupted writes; no fallback policy changed.
-Focused session and fallback tests passed: 34 tests, exit 0.
+Focused session and fallback tests passed: 37 tests, exit 0.
 Evidence: `.bridge/session-repair-1791183836888/stdout.log`.
 WineGlobe evidence identifies five Claude timeouts and one Codex timeout.
 The inspected traces do not establish hundreds of persisted reconnect notices.
+
+2026-10-05 — LT-001/002/003/005/007 registry implementation after `edbb615`.
+The server-owned registry preserves deadlines and removes disconnected waiters.
+It bounds active jobs, connected waiters, retained results and cache lifetime.
+Five isolated registry tests passed, including 300 detached retries with one execution.
+Shutdown waits for controlled cleanup before releasing ownership.
+Evidence: `.bridge/registry-check-1791183996960/stdout.log`.
+HTTP integration remains pending.
 
 Implementation, independent review and final regression remain pending.
 The running provider remains owned by its existing operator.
