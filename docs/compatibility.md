@@ -15,11 +15,15 @@ Claude defaults to 75-minute attempts and 90-minute requests, including queueing
 | Queue recovery | An identical request retried after a certified pre-spawn queue rejection. Unknown and post-spawn failures remained protected. |
 | Independent source review | Native reviewer accepted this candidate after two bounded follow-up fixes. The reviewer ran no tests. |
 | Windows authenticated long task | A real 60-minute Claude task and desktop reconnect behavior remain unverified. |
-| macOS / Linux | This repair has not run in the three-platform CI matrix. The earlier setup matrix below covers its earlier candidate. |
-| Running service | The existing provider remained running. This task did not restart it or activate the repaired source. |
+| Three-platform CI | Windows, macOS and Linux each passed 191 tests at `c20157413a6bbf628d910e4857a892a541d609b2`. See [CI run](https://github.com/Phlegonlabs/agent-bridge/actions/runs/37278766985). Its source matches the reviewed candidate. Authenticated macOS/Linux requests remain unverified. |
+| Running service | The owner authorized publication and restart on 2026-10-05. The replacement provider loaded `c201574` on port 32147. Health, authenticated status, model listing and the new session-header gate passed. A real 60-minute task remains unverified. |
 
 Private test evidence: `.bridge/claude-release-regression-1791184952379/stdout.log`.
 The [repair record](epics/EPIC-claude-long-task-reliability.md) retains checkpoints and remaining obligations.
+The public branch is `codex/harness-refresh-0.61.0`; it has not been merged into `main`.
+Shutdown cancelled an active Codex request because the host kept submitting work.
+The old provider and its recorded worker exited before replacement startup.
+The replacement remains running until the owner stops it.
 
 ## Public setup verification — 2026-10-04
 

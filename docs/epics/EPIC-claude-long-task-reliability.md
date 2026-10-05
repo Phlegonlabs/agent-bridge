@@ -1,6 +1,6 @@
 # Claude long-task reliability
 
-Status: locally_verified; live_validation_pending
+Status: activated; long_task_validation_pending
 
 ## Problem And Baseline
 
@@ -148,3 +148,34 @@ The next operator must finish active work before deliberately loading the repair
 Real 60-minute execution, desktop reconnect behavior and the new three-platform CI run remain unverified.
 Existing fallback effort-drift and host tool-replay risks remain deferred.
 The repair does not certify exactly-once host tool execution or UI rendering.
+
+2026-10-05 — owner authorized commit, push and provider restart.
+This supersedes the earlier no-publication and no-restart scope for this action.
+The worktree was clean at `c20157413a6bbf628d910e4857a892a541d609b2`.
+Thirteen unpublished commits passed a bounded credential-pattern and private-path scan with no findings.
+The exact candidate was pushed to `origin/codex/harness-refresh-0.61.0` and verified by remote readback.
+`main` remains unchanged; no merge or protected-branch promotion occurred.
+Windows, macOS and Linux each passed 191 tests in CI run `37278766985`.
+CI source bytes match reviewed candidate `3b3d576`; later candidate changes contained documentation only.
+
+The old service, PID 17072, had one active Codex request and no queued requests.
+Waiting allowed its first observed request to finish, but the host immediately submitted another.
+The user was told that the restart would cancel the active request.
+Authenticated shutdown returned 202; the old service and its recorded worker exited.
+Port 32147 was free before replacement startup.
+The replacement started at `2026-10-05T07:45:57.8667820Z`, PID 34560.
+It loaded `c201574` from this checkout and remained running by owner request.
+Its private process record includes PID, start time, command, project, port and authenticated shutdown endpoint.
+Lifetime: until explicit user shutdown; this is the requested persistent service, not a temporary preview.
+
+Health returned ready and matched configuration SHA-256:
+`88691397b0719435199f28a4163f5aeb2b0a50b1a0f96c48b36fecf966bd2626`.
+Authenticated status exposed the new delegate registry; model listing returned 17 configured models.
+Effective Claude budgets were 4,500,000 ms per attempt and 5,400,000 ms per request.
+An invalid session header returned 400 / `INVALID_SESSION_INPUT` before execution.
+The host submitted a new request after restart; no interrupted task was manually replayed.
+Evidence: `.bridge/publish-restart-1791185834586/live-verification.json` and its private process records.
+Local credentials, session receipts and logs were preserved and remained ignored.
+Installed Harness 0.61.0 shared instructions remain current by meaning; loaded skill identity remains unknown.
+The document index still names the affected guides and this Epic.
+Real 60-minute Claude execution and desktop reconnect validation remain outstanding.
