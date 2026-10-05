@@ -1,5 +1,26 @@
 # Compatibility evidence
 
+## Claude long-task repair — 2026-10-05
+
+Source candidate: `3b3d576ebbfa5ec2787ca3ef3445f5b690c6f5a2`.
+The repair separates session-identified Claude execution from HTTP connections.
+Claude defaults to 75-minute attempts and 90-minute requests, including queueing.
+
+| Check | Evidence and limit |
+| --- | --- |
+| Windows Node 24.19.0 | All 191 offline tests passed against this candidate. |
+| Reconnect ownership | 300 registry detachments and 20 HTTP disconnects retained one synthetic worker. The HTTP fixture recorded one side effect. |
+| Deadlines and shutdown | Short controlled deadlines did not reset on retries. Shutdown waited for detached worker cleanup. |
+| Session safety | Interrupted writes remained uncertain. Legacy automatic resumption required inspection. PID evidence survived result validation failures. |
+| Queue recovery | An identical request retried after a certified pre-spawn queue rejection. Unknown and post-spawn failures remained protected. |
+| Independent source review | Native reviewer accepted this candidate after two bounded follow-up fixes. The reviewer ran no tests. |
+| Windows authenticated long task | A real 60-minute Claude task and desktop reconnect behavior remain unverified. |
+| macOS / Linux | This repair has not run in the three-platform CI matrix. The earlier setup matrix below covers its earlier candidate. |
+| Running service | The existing provider remained running. This task did not restart it or activate the repaired source. |
+
+Private test evidence: `.bridge/claude-release-regression-1791184952379/stdout.log`.
+The [repair record](epics/EPIC-claude-long-task-reliability.md) retains checkpoints and remaining obligations.
+
 ## Public setup verification — 2026-10-04
 
 The public CLI now supports per-provider setup/login/doctor/models, local configuration precedence, one registration flow and foreground startup with port/identity checks. Runtime discovery covers Windows, macOS and Linux. The model IDs and reasoning levels in the tracked legacy configuration are examples from the tested environment; setup uses the selected local catalogs instead.

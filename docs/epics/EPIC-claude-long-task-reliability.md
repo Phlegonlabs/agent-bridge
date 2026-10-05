@@ -1,6 +1,6 @@
 # Claude long-task reliability
 
-Status: in_progress
+Status: locally_verified; live_validation_pending
 
 ## Problem And Baseline
 
@@ -117,7 +117,34 @@ Unknown and post-spawn failures remain retained; request deadlines remain unchan
 Focused registry, HTTP and fallback tests passed, including queue rejection followed by one successful execution.
 Evidence: `.bridge/admission-repair-1791184853093/stdout.log`.
 
-Implementation, independent review and final regression remain pending.
-The running provider remains owned by its existing operator.
-WineGlobe remains read-only, including its unrelated untracked `nul` file.
-Real 60-minute execution and desktop reconnect evidence remain separate validation obligations.
+2026-10-05 — final source checkpoint at `3b3d576ebbfa5ec2787ca3ef3445f5b690c6f5a2`.
+Branch remains `codex/harness-refresh-0.61.0`; its worktree was clean.
+The native independent reviewer accepted this candidate with no remaining actionable findings.
+All 191 offline tests passed on Windows Node 24.19.0, exit 0.
+Evidence: `.bridge/claude-release-regression-1791184952379/stdout.log`.
+Scoped source/test/config/README/native-provider diff SHA-256 from baseline `90b4e48`:
+`24bc9f85f72507d0131d20f57fb4808e002d9118d276261d7992d11f37cc209f`.
+The repair commits are `edbb615`, `aa511df`, `cdb3d3e`, `fa53903`, `2b602ef` and `3b3d576`.
+New modules and tests remain below 500 lines.
+Private state and logs remain ignored; source, fixtures and the configuration example remain tracked.
+The README pair, native-provider guide and compatibility record agree with the accepted repair.
+No PRD or architecture source exists; that baseline gap remains recorded above.
+Installed Harness remains 0.61.0; loaded identity remains unknown.
+Template SHA-256: `feed8dcc70b3691d9822a1b05641d4502dae452fd1926954f09db3fc78fff62f`.
+Shared AGENTS rules remain current by meaning; retain the intentional deployment paragraph.
+No governance edit was needed.
+
+WineGlobe stayed on `docs/wineglobe-product-definition`, HEAD `ef18c7bb71370a224723c4761e5b624c79875cb4`.
+Its only working-tree item remained the unrelated untracked `nul` file.
+The inspected UI workflow uses bounded host asks; it contains no hundreds-iteration retry loop.
+Five Claude executions shared one native session and reached approximately 541 seconds.
+One Codex execution also timed out. Quota-pressure events did not establish quota rejection as the timeout cause.
+The bounded trace inspection did not prove hundreds of persisted reconnect notices.
+A proposed WineGlobe Epic trace update remains unwritten because that checkout was read-only.
+
+The existing provider remained ready on port 32147, PID 17072, with an established connection.
+This task did not stop, restart or publish it.
+The next operator must finish active work before deliberately loading the repaired source.
+Real 60-minute execution, desktop reconnect behavior and the new three-platform CI run remain unverified.
+Existing fallback effort-drift and host tool-replay risks remain deferred.
+The repair does not certify exactly-once host tool execution or UI rendering.
