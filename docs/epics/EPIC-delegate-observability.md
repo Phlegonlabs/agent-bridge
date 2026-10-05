@@ -157,3 +157,10 @@ No task was manually replayed, and no account or session configuration was migra
 Evidence: `.bridge/observability-deploy-070b6a6e-7d49-41f6-97c8-b34ad4458df1/`.
 Real 60-minute completion and installed ZCode workflow progress rendering remain unverified.
 Harness 0.61.0 shared rules remain current by meaning. Loaded skill identity remains unobserved.
+
+2026-10-05 — handoff checkpoint: documentation receipt `1b89411` also passed the three-platform CI matrix.
+Evidence: [CI run 37299450420](https://github.com/Phlegonlabs/agent-bridge/actions/runs/37299450420).
+Its execution source remains identical to deployed `7549d9a`. The worktree was clean.
+The installed Harness is now 0.62.1, an externally observed version change during closeout.
+The shared template SHA-256 remains `feed8dcc70b3691d9822a1b05641d4502dae452fd1926954f09db3fc78fff62f`.
+Shared AGENTS rules remain current by meaning, with the retained local deployment section. Loaded skill identity remains unobserved.
