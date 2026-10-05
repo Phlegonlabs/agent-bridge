@@ -15,7 +15,7 @@ Connection heartbeats do not count as worker activity. Terminal success still re
 | Privacy | Tests checked authentication, session/project filtering, Unicode paths and payload exclusion. Project paths and hashes do not appear in status responses. |
 | Independent source review | Native reviewer accepted this candidate after two bounded delta repairs. The reviewer ran no tests. |
 | Three-platform CI | Windows, macOS and Linux each passed 209 tests at `7549d9a2225eff22176268216ef310ac574d1878` in [CI run 37298333394](https://github.com/Phlegonlabs/agent-bridge/actions/runs/37298333394). Its execution source matches the reviewed candidate. |
-| Running service | Runtime PID 8260 loaded `7549d9a` on port 32147 after idle shutdown. Health, authenticated task lookup, model listing and unauthorized lookup checks passed. |
+| Running service | Runtime PID 35188 loaded `35bdbc7` on port 32147 after the owner's additional idle restart. Health and authenticated task lookup passed again. Earlier model listing and unauthorized lookup checks passed on the same execution source. |
 | Desktop/account validation | Real long-task activity and installed ZCode concurrent polling/rendering remain unverified. |
 
 Private test evidence: `.bridge/observability-admission-ad68c5dd-618a-490e-b23f-7ad9785bd0a8.log`.

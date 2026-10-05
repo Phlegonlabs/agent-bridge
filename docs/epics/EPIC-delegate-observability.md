@@ -164,3 +164,15 @@ Its execution source remains identical to deployed `7549d9a`. The worktree was c
 The installed Harness is now 0.62.1, an externally observed version change during closeout.
 The shared template SHA-256 remains `feed8dcc70b3691d9822a1b05641d4502dae452fd1926954f09db3fc78fff62f`.
 Shared AGENTS rules remain current by meaning, with the retained local deployment section. Loaded skill identity remains unobserved.
+
+2026-10-05 — the owner requested another local restart after deployment.
+The clean baseline was `35bdbc778219110e1136b9888cec270b3d67bc62` on the existing branch.
+Active, queued and delegate counts were zero before authenticated shutdown.
+Old runtime PID 8260, its recorded children and the earlier Volta launchers exited.
+The replacement uses the actual Node executable directly. Runtime PID 35188 started at `2026-10-05T11:04:33.2880000Z`.
+It loaded `35bdbc7` on port 32147 and remains active until owner shutdown.
+Health matched the existing configuration hash. Authenticated task lookup and the status CLI passed.
+No task was cancelled or manually replayed. No configuration or credential file changed.
+Private evidence: `.bridge/provider-restart-e5607001-2821-4d2e-973a-34f6cbae2dc7/`.
+This follow-up changes operational documentation only. Real desktop long-task validation remains pending.
+Installed Harness remains 0.62.1; its unchanged shared template still matches AGENTS by meaning.
