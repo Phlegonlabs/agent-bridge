@@ -194,6 +194,10 @@ Status separates queueing, worker start, last observed native activity, cleanup 
 Heartbeat and polling do not advance activity. Silence does not trigger a rerun.
 The monitor ends after ten minutes by default; Ctrl+C stops only monitoring.
 Native ZCode views may still show only the final answer; status lookup remains independent.
+For a CLI workflow batch, use `status --workflow-id UUID --watch`; its UUID appears in progress output.
+The saved `model-bridge` workflow reports job states while waiting for results.
+Standalone CLI workers print sanitized progress to stderr and keep final JSON on stdout.
+Workflow status is the last recorded snapshot; it does not certify that an old process remains alive.
 Results remain cached for up to 15 minutes, within count and memory limits.
 Completed Claude receipts also support replay after cache expiry or restart.
 HTTP reconnection cannot guarantee exactly-once rendering in the host UI.

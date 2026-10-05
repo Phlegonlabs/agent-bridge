@@ -76,7 +76,41 @@ const jobsJson = JSON.stringify(jobs);
 if (jobsJson.length > 12000) throw new Error("Plan exceeds inline command size; use the bridge CLI with --jobs-file");
 commandArgs.push("--jobs-json=" + jobsJson);
 phase("依保存的模型組合執行任務");
-const result = await world.run("node", commandArgs, { timeoutMs: 600000 });
+const identity = await world.run("node", ["-e", "process.stdout.write(require('node:crypto').randomUUID())"], { timeoutMs: 10000 });
+const workflowId = identity.stdout.trim();
+if (identity.exitCode !== 0 || !/^[0-9a-f-]{36}$/.test(workflowId)) throw new Error("Cannot create workflow identity");
+commandArgs.push("--run-id=" + workflowId);
+report({ workflowId, statusCommand: "node bin/bridge.mjs status --workflow-id " + workflowId });
+let executionFinished = false;
+const execution = Promise.resolve(world.run("node", commandArgs, { timeoutMs: 600000 })).then(
+  value => { executionFinished = true; return { value, error: null }; },
+  error => { executionFinished = true; return { value: null, error }; }
+);
+let progressReports = 0;
+let lastSummary = "";
+// Reports are bounded below the host's 256-item cap. Polling never dispatches workers.
+for (let observation = 0; observation < 300 && !executionFinished; observation++) {
+  const status = await world.run("node", ["bin/bridge.mjs", "status", "--workflow-id=" + workflowId,
+    "--wait-ms=2000"], { timeoutMs: 10000 });
+  if (status.exitCode !== 0) continue;
+  const snapshot = JSON.parse(status.stdout) as {
+    available: boolean; workflowState?: string; observationAgeMs?: number;
+    tasks: { jobId: string; state: string; attempt: number; lastActivityAt: number | null;
+      lastActivityKind: string | null; lastActivityAgeMs: number | null; code: string | null }[];
+  };
+  if (!snapshot.available || !Array.isArray(snapshot.tasks)) continue;
+  const summary = JSON.stringify(snapshot.tasks.map(task => ({ id: task.jobId, state: task.state,
+    attempt: task.attempt, activity: task.lastActivityKind, code: task.code })));
+  // Report changed state/kind, plus periodic activity ages during quiet waits.
+  if ((summary !== lastSummary || observation % 15 === 0) && progressReports < 128) {
+    report({ workflowId, executionStatus: snapshot.tasks, observation: "recorded-workflow",
+      observationAgeMs: snapshot.observationAgeMs });
+    lastSummary = summary; progressReports++;
+  }
+}
+const settled = await execution;
+if (settled.error || !settled.value) throw new Error("Bridge execution did not return a result");
+const result = settled.value;
 if (result.exitCode !== 0) throw new Error("Bridge failed: " + result.stdout);
 const parsed = JSON.parse(result.stdout) as {
   ok: boolean; preset: string; parallelLimit: number; peakParallel: number; fallbackEnabled: boolean;

@@ -51,3 +51,15 @@ The README pair and native provider guide now document lookup and the native UI 
 Workflow persistence and final regression remain pending. No live provider was restarted.
 The final native-path check passed 80 tests after bounded client decoding and deadline-code separation.
 Evidence: `.bridge/progress-native-final-780c69bd-dd7e-4c1d-a9b4-5100ec1ccf1a.log`.
+
+2026-10-05 — after `a6ece67`, working-tree: add bounded atomic workflow status snapshots.
+Scope: workflow execution, status reader, CLI progress, saved workflow and workflow guide.
+The saved adapter reserves a fresh run UUID and polls status while execution remains pending.
+It reports state changes and periodic activity ages without altering final JSON stdout.
+Recorded nonterminal snapshots label liveness unverified; task identity reuse is rejected.
+The first focused run passed 26 tests and failed one synthetic facade test.
+The fixture stripped a top-level return as a module; it now strips the existing workflow function body.
+Evidence: `.bridge/workflow-progress-21491062-11c2-45ca-a7b8-9ea41e2a49ce.log`.
+Real installed-host rendering remains separate from the synthetic facade test.
+The repaired focused run passed all 27 tests.
+Evidence: `.bridge/workflow-progress-final-302e8518-be8b-493c-bdd2-d9f69bdd2ce5.log`.

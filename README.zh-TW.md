@@ -193,6 +193,10 @@ Bridge 會接回原本的任務，切換串流或一次回傳也適用。
 Heartbeat 和查詢不更新活動時間；安靜一段時間不會觸發重跑。
 監看預設十分鐘後結束；Ctrl+C 只停止監看。
 ZCode 原生畫面可能仍只顯示最終答案；可獨立查詢任務狀態。
+CLI workflow batch 可用 `status --workflow-id UUID --watch`；UUID 會出現在進度輸出。
+已保存的 `model-bridge` workflow 在等待結果期間會報告各 job 狀態。
+Standalone CLI worker 把整理後的進度寫入 stderr，stdout 保留最終 JSON。
+Workflow 狀態是最後記錄的快照，不能證明舊程序仍在執行。
 結果最多暫存 15 分鐘，並受數量及記憶體上限限制。
 已完成的 Claude receipt 也能在暫存到期或服務重啟後回傳結果。
 HTTP 重連不能保證主程式畫面只顯示一次結果。

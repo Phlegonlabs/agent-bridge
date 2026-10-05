@@ -1,5 +1,7 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { TaskProgress, notifyProgress, taskIdPattern } from './task-progress.mjs';
+import { WorkflowStatusJournal } from './workflow-status.mjs';
 import { setMaxListeners } from 'node:events';
 import path from 'node:path';
 import { bridgeRoot } from './account.mjs';
@@ -109,15 +111,26 @@ export async function executeRoute(route, options) {
 }
 
 // A slot stays occupied through fallback and process cleanup. Limits are per batch.
-export async function executeJobs({ preset, jobs, cwd, signal, trustWorkspace = false, execute = executeRoute }) {
+export async function executeJobs({ preset, jobs, cwd, signal, trustWorkspace = false, execute = executeRoute, onProgress, runId }) {
   preset = validatePreset(structuredClone(preset));
   jobs = structuredClone(jobs);
   validateJobs(jobs, preset);
   const controller = new AbortController();
   setMaxListeners(preset.parallelLimit + 2, controller.signal);
   const deadline = Date.now() + preset.runTimeoutMs;
+  const tasks = jobs.map(job => {
+    const route = preset.routes[preset.workers[job.worker].route];
+    const progress = new TaskProgress({ parentRunId: runId, jobId: job.id, provider: route.provider,
+      model: route.model ?? route.expectedModel, deadlineAt: deadline, onChange: onProgress });
+    notifyProgress(onProgress, progress.snapshot()); progress.update({ type: 'queued' });
+    return progress;
+  });
   let stopCode, next = 0, active = 0, peakParallel = 0;
-  const stop = code => { stopCode ??= code; controller.abort(); };
+  const stop = code => {
+    stopCode ??= code;
+    for (const progress of tasks) progress.update({ type: 'stopping' });
+    controller.abort();
+  };
   const cancel = () => stop('CANCELLED');
   signal?.addEventListener('abort', cancel, { once: true });
   if (signal?.aborted) cancel();
@@ -136,8 +149,10 @@ export async function executeJobs({ preset, jobs, cwd, signal, trustWorkspace = 
           if (remaining < 100) { stop('WORKFLOW_TIMEOUT'); break; }
           const startedAt = Date.now();
           let result;
+          const route = preset.routes[routeName];
+          const observe = tasks[index].beginAttempt({ provider: route.provider, model: route.model ?? route.expectedModel });
           try {
-            result = await execute(preset.routes[routeName], { cwd, task: job.task, trustWorkspace,
+            result = await execute(route, { cwd, task: job.task, trustWorkspace, onProgress: observe,
               timeoutMs: Math.min(preset.attemptTimeoutMs, remaining), signal: controller.signal });
           } catch (error) {
             result = { ok: false, code: error instanceof BridgeError ? error.code : 'BRIDGE_ERROR' };
@@ -151,6 +166,7 @@ export async function executeJobs({ preset, jobs, cwd, signal, trustWorkspace = 
           code: last?.result.code ?? stopCode ?? 'NOT_STARTED', route: last?.route,
           actualModel: last?.result.actualModel, response: last?.result.response,
           fallbackUsed: attempts.length > 1, attempts };
+        tasks[index].settle(results[index]);
       } finally { active--; }
     }
   }
@@ -163,21 +179,34 @@ export async function executeJobs({ preset, jobs, cwd, signal, trustWorkspace = 
   for (let index = 0; index < jobs.length; index++) {
     results[index] ??= { id: jobs[index].id, worker: jobs[index].worker, ok: false,
       code: stopCode ?? 'NOT_STARTED', fallbackUsed: false, attempts: [] };
+    tasks[index].settle(results[index]);
   }
   const ok = !stopCode && results.every(result => result.ok);
   return { ok, code: stopCode ?? (ok ? 'VERIFIED' : 'WORKFLOW_FAILED'),
     parallelLimit: preset.parallelLimit, peakParallel, fallbackEnabled: preset.fallback.enabled, jobs: results };
 }
-export async function runWorkflow({ name, preset, jobs, ...options }) {
+export async function runWorkflow({ name, preset, jobs, runId = randomUUID(), onProgress, ...options }) {
   validatePreset(preset); validateJobs(jobs, preset);
-  const runId = randomUUID(), logs = path.join(bridgeRoot, '.bridge', 'workflows', runId);
-  await mkdir(logs, { recursive: true, mode: 0o700 });
+  if (!taskIdPattern.test(runId)) throw new BridgeError('INVALID_TASK_ID', 'Use a UUID workflow ID.');
+  const parent = path.join(bridgeRoot, '.bridge', 'workflows'), logs = path.join(parent, runId);
+  await mkdir(parent, { recursive: true, mode: 0o700 });
+  try { await mkdir(logs, { mode: 0o700 }); }
+  catch (error) { if (error.code === 'EEXIST') throw new BridgeError('WORKFLOW_ID_EXISTS', 'This workflow ID already exists. Status lookup never reruns it.'); throw error; }
   await writeFile(path.join(logs, 'request.json'), JSON.stringify({ name, preset,
     jobs: jobs.map(({ id, worker, task }) => ({ id, worker, taskSha256: hash(task) })) }, null, 2), { flag: 'wx', mode: 0o600 });
-  const report = { schema: 'agent-bridge/workflow/1', runId, preset: name,
-    ...await executeJobs({ preset, jobs, ...options }), logs };
-  await writeFile(path.join(logs, 'result.json'), JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
-  return report;
+  const journal = new WorkflowStatusJournal(logs, runId);
+  try {
+    const report = { schema: 'agent-bridge/workflow/1', runId, preset: name,
+      ...await executeJobs({ preset, jobs, ...options, runId, onProgress: snapshot => {
+        journal.observe(snapshot); notifyProgress(onProgress, snapshot);
+      } }), logs };
+    await writeFile(path.join(logs, 'result.json'), JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });
+    report.progressAvailable = await journal.finish(report);
+    return report;
+  } catch (error) {
+    await journal.finish({ ok: false, code: error instanceof BridgeError ? error.code : 'WORKFLOW_FAILED' });
+    throw error;
+  }
 }
 
 // Native world.run captures at most 256 KiB. Full responses stay in the run journal.

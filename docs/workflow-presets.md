@@ -39,6 +39,29 @@ The planning actor receives worker descriptions and route/model names and is ins
 
 Only independent jobs belong in one batch. The outer orchestrator must await one batch, read its results, and prepare a later batch for dependent stages. Each batch has its own concurrency limit; there is no global cap across separate ZCode workflow runs.
 
+## Check execution
+
+Every job records queueing, worker start, native activity and terminal verification.
+The CLI writes sanitized progress to stderr; stdout remains one final JSON result.
+Workflow snapshots are private files under `.bridge/workflows/<UUID>/status.json`.
+The saved workflow reports its UUID before execution and polls status while the batch runs.
+Its intermediate reports show job states and last observed activity, without worker content.
+Reports are bounded below ZCode's item limit. Existing native actor views may still show final answers only.
+
+Use the UUID to check a batch independently:
+
+```sh
+node bin/bridge.mjs status --workflow-id UUID
+node bin/bridge.mjs status --workflow-id UUID --watch
+```
+
+Lookup reads recorded snapshots; nonterminal process liveness remains unverified.
+The activity age increases during silence. Heartbeats and status reads do not update activity timestamps.
+Missing or old status is unavailable evidence, never permission to rerun a job.
+`workflow --run-id UUID` reserves a new UUID; an existing run directory is rejected.
+Standalone `run` commands print the same lifecycle checks to stderr.
+For native provider subagents, use the authenticated task lookup in [native provider](native-provider.md).
+
 ## Start from ZCode
 
 Open this repository as the project. For main-model routing, ask:

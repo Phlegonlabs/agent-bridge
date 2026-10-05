@@ -5,9 +5,16 @@ import { readProviderConfig, providerState } from './provider-server.mjs';
 import { BridgeError } from './profiles.mjs';
 import { delegateSessionKey } from './delegate-requests.mjs';
 import { taskIdPattern, terminalStates, publicTaskStatus } from './task-progress.mjs';
+import { readWorkflowStatus } from './workflow-status.mjs';
 
-export async function readTaskStatus({ taskId, sessionId, sessionType, config, signal,
+export async function readTaskStatus({ taskId, sessionId, sessionType, workflowId, waitMs = 0, config, signal,
   state = providerState, fetchImpl = fetch } = {}) {
+  if (!Number.isInteger(waitMs) || waitMs < 0 || waitMs > 10000) throw new BridgeError('INVALID_ARGUMENT', 'Status delay must be 0..10000 ms.');
+  if (waitMs) await pause(waitMs, undefined, { signal });
+  if (workflowId !== undefined) {
+    if (taskId || sessionId || sessionType || config) throw new BridgeError('INVALID_ARGUMENT', 'Workflow lookup cannot use provider or session options.');
+    return readWorkflowStatus(workflowId);
+  }
   if (taskId !== undefined && !taskIdPattern.test(taskId)) throw new BridgeError('INVALID_TASK_ID', 'Use a UUID task ID.');
   if (taskId && sessionId || sessionType !== undefined && sessionId === undefined) {
     throw new BridgeError('INVALID_ARGUMENT', 'Choose a task ID or session headers.');
@@ -62,7 +69,8 @@ export async function watchTaskStatus(options, emit, read = readTaskStatus) {
     try { value = await read(options); }
     catch (error) { if (Date.now() >= end && options.signal.aborted) return; throw error; }
     emit(value);
-    if (!value.available || (options.taskId && value.tasks.every(task => terminalStates.has(task.state)))) return;
+    if (!value.available || (options.taskId && value.tasks.every(task => terminalStates.has(task.state))) ||
+        (options.workflowId && value.workflowState !== 'running')) return;
     const remaining = end - Date.now();
     if (remaining <= 0) break;
     try { await pause(Math.min(interval, remaining), undefined, { signal: options.signal }); }
