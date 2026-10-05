@@ -1,6 +1,6 @@
 # Delegate observability
 
-Status: in progress.
+Status: implemented locally; activation and live validation pending.
 
 The owner requested visible execution checks for workflows and subagents on 2026-10-05.
 The baseline is `2a555b54bb443c1fc35d1e9f2270b50c5200aa7d` on `codex/harness-refresh-0.61.0`.
@@ -120,3 +120,14 @@ Explicit project lookup retains strict validation. A regression checks both rela
 All 209 offline tests passed after this repair.
 Evidence: `.bridge/observability-admission-ad68c5dd-618a-490e-b23f-7ad9785bd0a8.log`.
 Independent repair review remains pending. No provider process or external state changed.
+
+2026-10-05 — source candidate `288fa52ac9731ce21d1a42b96eeb5be3bb6cadb6` passed independent read-only review.
+The reviewer accepted both delta repairs and reported no remaining high-confidence actionable findings.
+The 209-test regression above covers these source bytes. The reviewer did not run tests or services.
+Final source diff: `.bridge/observability-final-source-fe478a55-792a-4166-b0d2-971bd5cbc702.patch`.
+Its SHA-256 is `17f31b83de1b4588b5318de0e90b86b5ce2a32766ee72934b28e90ca90c07d77`.
+README translations and the native-provider, workflow and compatibility guides agree with the implemented status contract.
+This closeout changes documentation only. OBS-001 through OBS-006 have local synthetic verification.
+The working branch remains `codex/harness-refresh-0.61.0`. No provider activation or publication occurred in this round.
+Installed ZCode rendering, authenticated long-task activity and new three-platform CI remain pending.
+The next activation owner must load this source before using its native task status endpoint.

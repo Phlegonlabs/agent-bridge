@@ -1,5 +1,26 @@
 # Compatibility evidence
 
+## Delegate observability — 2026-10-05
+
+Source candidate: `288fa52ac9731ce21d1a42b96eeb5be3bb6cadb6`.
+Workflow and native provider tasks now expose lifecycle states and observed activity timestamps.
+Authenticated status lookup supports task, session and privately matched project directories.
+Connection heartbeats do not count as worker activity. Terminal success still requires the existing execution audit.
+
+| Check | Evidence and limit |
+| --- | --- |
+| Windows Node 24.19.0 | All 209 offline tests passed against this candidate. |
+| Native provider observation | Synthetic queue, spawn, activity, reconnect, deadline and cleanup fixtures passed. No new authenticated model request was made. |
+| Workflow observation | Atomic snapshots, final flushing and bounded polling passed. The saved workflow ran against a synthetic facade. |
+| Privacy | Tests checked authentication, session/project filtering, Unicode paths and payload exclusion. Project paths and hashes do not appear in status responses. |
+| Independent source review | Native reviewer accepted this candidate after two bounded delta repairs. The reviewer ran no tests. |
+| Three-platform CI | This candidate has not been pushed. Earlier CI results below cover earlier source only. |
+| Running service | This change has not been activated. The previously installed provider remains separate from this candidate. |
+| Desktop/account validation | Real long-task activity and installed ZCode concurrent polling/rendering remain unverified. |
+
+Private test evidence: `.bridge/observability-admission-ad68c5dd-618a-490e-b23f-7ad9785bd0a8.log`.
+The [observability record](epics/EPIC-delegate-observability.md) retains scope, review and remaining obligations.
+
 ## Claude long-task repair — 2026-10-05
 
 Source candidate: `3b3d576ebbfa5ec2787ca3ef3445f5b690c6f5a2`.
