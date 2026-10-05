@@ -299,7 +299,7 @@ export class ClaudeSessions {
         executionStarted ||= error.nativeStarted === true || error.nativeExecutionStarted === true ||
           error.worker?.nativeStarted === true ||
           Number.isInteger(error.worker?.execution?.pid) && error.worker.execution.pid > 0;
-        if (executionStarted) error.nativeExecutionStarted = true;
+        error.nativeExecutionStarted = executionStarted;
         if (!executionStarted) {
           if (receipt) await this.#writeAtomic(this.#statePath(keyHash), receipt);
           else await unlink(this.#statePath(keyHash)).catch(() => {});

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { DelegateRequests, delegateSessionKey } from '../src/delegate-requests.mjs';
+import { BridgeError } from '../src/profiles.mjs';
 
 function gate() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 const turn = (start, overrides = {}) => ({ sessionKey: delegateSessionKey('session'), fingerprint: 'turn', timeoutMs: 2000, start, ...overrides });
@@ -80,4 +81,21 @@ test('headers are validated before accepting a session identity', () => {
     assert.throws(() => delegateSessionKey(value), { code: 'INVALID_SESSION_INPUT' });
   }
   assert.notEqual(delegateSessionKey('a', 'chat'), delegateSessionKey('a', 'subagent'));
+});
+
+test('certified pre-spawn admission failures retry, while uncertain failures stay retained', async () => {
+  for (const started of [false, true, undefined]) {
+    const registry = new DelegateRequests(); let calls = 0;
+    const start = async () => {
+      calls++;
+      if (calls === 1) throw Object.assign(new BridgeError('QUEUE_FULL', 'full'), { nativeExecutionStarted: started });
+      return 'one completed execution';
+    };
+    try {
+      assert.equal((await registry.attach(turn(start)).outcome).error.code, 'QUEUE_FULL');
+      const retry = await registry.attach(turn(start)).outcome;
+      if (started === false) { assert.equal(retry.result, 'one completed execution'); assert.equal(calls, 2); }
+      else { assert.equal(retry.error.code, 'QUEUE_FULL'); assert.equal(calls, 1); }
+    } finally { await registry.shutdown(); }
+  }
 });

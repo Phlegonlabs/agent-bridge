@@ -110,6 +110,13 @@ Capture PID evidence before validation so oversized results retain uncertainty.
 The probe failed before repair and passed afterward; 38 focused session/fallback tests passed.
 Evidence: `.bridge/pid-validation-probe-1791184654651/stdout.log` and `.bridge/pid-validation-repair-1791184673906/stdout.log`.
 
+2026-10-05 — LT-001/003 admission repair after `2b602ef`.
+The independent reviewer found that cached pre-spawn queue errors prevented retries after capacity recovered.
+Certified pre-spawn queue, cooldown and provider-availability errors now release their cache entry.
+Unknown and post-spawn failures remain retained; request deadlines remain unchanged.
+Focused registry, HTTP and fallback tests passed, including queue rejection followed by one successful execution.
+Evidence: `.bridge/admission-repair-1791184853093/stdout.log`.
+
 Implementation, independent review and final regression remain pending.
 The running provider remains owned by its existing operator.
 WineGlobe remains read-only, including its unrelated untracked `nul` file.

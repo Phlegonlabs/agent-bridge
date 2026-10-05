@@ -36,7 +36,7 @@ async function fixture(work, configure = () => {}) {
   });
   const status = async () => (await (await fetch(`${base}/status`, { headers: { Authorization: 'Bearer test' },
     signal: AbortSignal.timeout(1000) })).json()).delegates;
-  try { await work({ request, status, body, pending, began, server, relay, state,
+  try { await work({ request, status, body, pending, began, server, relay, pool, state,
     calls: () => calls, signal: () => workerSignal }); }
   finally { pending.resolve(); await server.shutdown(); await rm(state, { recursive: true, force: true }); }
 }
@@ -112,4 +112,18 @@ test('HTTP retries cannot extend the Claude request deadline', async () => {
     assert.ok(Date.now() - startedAt < 1800, 'reattachment must not start a second deadline');
     assert.equal(calls(), 1);
   }, config => { config.claudeDelegate.requestTimeoutMs = 1000; });
+});
+
+test('an identical HTTP request retries after a pre-spawn queue rejection', async () => {
+  await fixture(async ({ request, body, pool, pending, calls }) => {
+    pool.maxQueue = 0;
+    const first = await request({ ...body, stream: false });
+    assert.equal(first.status, 429); assert.equal((await first.json()).error.code, 'QUEUE_FULL');
+    assert.equal(calls(), 0);
+    pool.maxQueue = 64; pending.resolve();
+    const retry = await request({ ...body, stream: false });
+    assert.equal(retry.status, 200);
+    assert.equal((await retry.json()).choices[0].message.content, 'audited final answer');
+    assert.equal(calls(), 1);
+  });
 });

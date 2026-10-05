@@ -58,6 +58,8 @@ export class DelegateRequests {
         return start(controller.signal);
       }).then(result => ({ result }), error => ({ error })).then(outcome => {
         clearTimeout(timer);
+        const retryableAdmission = !controller.signal.aborted && outcome.error?.nativeExecutionStarted === false &&
+          ['QUEUE_FULL', 'RATE_LIMITED', 'PROVIDER_UNAVAILABLE'].includes(outcome.error.code);
         if (controller.signal.aborted) outcome = { error: controller.signal.reason };
         if (outcome.error) {
           const error = outcome.error;
@@ -67,6 +69,7 @@ export class DelegateRequests {
         entry.outcome = outcome; entry.finishedAt = this.#limits.now();
         entry.bytes = Buffer.byteLength(JSON.stringify(outcome));
         this.#active.delete(sessionKey);
+        if (retryableAdmission) this.#entries.delete(key);
         for (const waiter of entry.waiters) { this.#waiters--; waiter(outcome); }
         entry.waiters.clear(); this.#prune();
       }).finally(() => this.#jobs.delete(job));
