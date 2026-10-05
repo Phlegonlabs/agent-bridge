@@ -10,6 +10,7 @@
 - `docs/epics/workflow-presets.md`: owner decisions and verification for reusable execution settings.
 - `docs/verification/workflow-presets.json`: redacted assertions from native runs and offline tests.
 - `docs/native-provider.md`: native dropdown provider, connection settings and current verification limits.
+- [Claude long-task reliability](epics/EPIC-claude-long-task-reliability.md): interrupted-request repair, reconnect lifetime and verification.
 - `skills/codex-imagegen/SKILL.md`: ZCode instructions for native Codex image generation; set the bridge path for your checkout before installing.
 - `docs/epics/native-provider.md`: implementation scope and native protocol evidence.
 
