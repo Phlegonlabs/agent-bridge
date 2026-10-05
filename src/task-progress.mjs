@@ -27,7 +27,8 @@ export function publicTaskStatus(value) {
 
 // Observability cannot change execution, permission, audit or cleanup behavior.
 export function notifyProgress(observer, event) {
-  try { observer?.(event); } catch { /* The execution owner still verifies the result. */ }
+  try { observer?.(event)?.catch?.(() => {}); }
+  catch { /* The execution owner still verifies the result. */ }
 }
 
 export class TaskProgress {

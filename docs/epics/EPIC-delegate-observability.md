@@ -63,3 +63,9 @@ Evidence: `.bridge/workflow-progress-21491062-11c2-45ca-a7b8-9ea41e2a49ce.log`.
 Real installed-host rendering remains separate from the synthetic facade test.
 The repaired focused run passed all 27 tests.
 Evidence: `.bridge/workflow-progress-final-302e8518-be8b-493c-bdd2-d9f69bdd2ce5.log`.
+
+2026-10-05 — candidate `2db1603` passed all 203 offline tests.
+Evidence: `.bridge/observability-regression-f1957095-fc16-468f-afcd-1915c87754c3.log`.
+A follow-up isolated probe found an unhandled rejection from asynchronous status observers.
+The notification helper now handles rejected observer promises without changing worker execution.
+A regression test checks this isolation. Final review and repaired-candidate regression remain pending.

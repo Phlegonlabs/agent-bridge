@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { TaskProgress, TaskStatuses } from '../src/task-progress.mjs';
+import { TaskProgress, TaskStatuses, notifyProgress } from '../src/task-progress.mjs';
 import { observeNativeProgress } from '../src/native-progress.mjs';
 
 test('status separates lifecycle, real activity, silence and terminal verification', () => {
@@ -60,4 +60,12 @@ test('lookup is bounded, session-scoped and expires without affecting execution'
   assert.doesNotMatch(JSON.stringify(statuses.list()), /private-a|private-b/);
   time = 201; assert.equal(statuses.get(a.record.taskId), null);
   assert.equal(statuses.get(b.record.taskId).state, 'accepted');
+});
+
+test('asynchronous observer rejection is isolated from worker execution', async () => {
+  notifyProgress(async () => { throw new Error('viewer unavailable'); }, { type: 'running' });
+  const task = new TaskProgress({ onChange: async () => { throw new Error('viewer unavailable'); } });
+  task.update({ type: 'running' }); task.settle({ ok: true, code: 'VERIFIED' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(task.snapshot().state, 'finished');
 });
