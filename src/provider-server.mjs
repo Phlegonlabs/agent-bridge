@@ -115,7 +115,10 @@ export function createProviderServer({ config, token, relay, pool = new Provider
         if (req.url === '/v1/tasks') {
           const sessionKey = req.headers['x-session-id'] === undefined ? undefined :
             delegateSessionKey(req.headers['x-session-id'], req.headers['x-zcode-session-type']);
-          const workspaceKey = req.headers['x-agent-bridge-workspace'] === undefined ? undefined : workspaceTaskKey(req.headers['x-agent-bridge-workspace']);
+          const workspaceKey = req.headers['x-agent-bridge-workspace-key'];
+          if (workspaceKey !== undefined && (typeof workspaceKey !== 'string' || !/^[a-f0-9]{64}$/.test(workspaceKey))) {
+            throw new BridgeError('INVALID_CWD', 'Status lookup requires a normalized project key.');
+          }
           send(res, 200, { schema: 'agent-bridge/tasks/1', tasks: statuses.list(sessionKey, workspaceKey) });
         } else {
           const taskId = req.url.slice('/v1/tasks/'.length);

@@ -61,6 +61,7 @@ Native ZCode actor views may show only the final answer. Use this independent st
 Status never becomes assistant answer text.
 Project lookup matches the working directory declared in the caller's context.
 Missing context cannot be matched. The lookup key and project path are not returned in status.
+The CLI sends an ASCII hash for project matching, including directories with Unicode names.
 Deadlines and provider shutdown clean up task-owned CLI processes, including detached workers.
 
 Never upload `.bridge`: it contains tokens, prompts, native session receipts and raw CLI logs. Run `npm test` for the offline suite. Legacy GLM profile workers remain available through `bin/bridge.mjs`, but no GLM native model route is registered because its relay dispatch audit fails.

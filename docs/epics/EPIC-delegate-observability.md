@@ -93,3 +93,23 @@ The directory declared in request context becomes a private normalized hash key.
 The authenticated API and CLI return neither that hash nor the project path.
 Requests without a declared absolute working directory remain unmatched.
 This OBS-004 follow-up adds no new execution or automatic retry behavior.
+
+2026-10-05 — candidate `4a31a6759db4294c796ca6cb857a5e37adb0aa95` passed all 208 offline tests on Windows Node 24.19.0.
+Evidence: `.bridge/observability-project-final-d10496aa-b965-4947-903a-a899c658e45e.log`.
+The tests cover workspace matching without exposing its path or private hash.
+Source diff from baseline: `.bridge/observability-source-diff-afd1375b-4ff3-4926-b7d8-a943bae60c1c.patch`.
+Its SHA-256 is `4272fe4e04c717e15e13e7eba673d65aa3dfd5bdecc0387279f0e0c89936d4d7`.
+All new modules remain below 500 physical lines. Existing `.bridge/` rules cover snapshots and verification logs.
+No credential files are tracked. WineGlobe and existing provider settings remain outside this write scope.
+The installed Harness remains 0.61.0; shared AGENTS rules remain current by meaning.
+Template SHA-256: `feed8dcc70b3691d9822a1b05641d4502dae452fd1926954f09db3fc78fff62f`.
+Loaded skill identity remains unobserved. No PRD or architecture source appeared during closeout.
+This candidate has not been pushed or loaded into the running provider.
+New three-platform CI, authenticated long-task activity and installed ZCode progress rendering remain unverified.
+
+2026-10-05 — working-tree: repair the independent delta review's Unicode lookup finding.
+Project matching now sends an ASCII hash through a validated private HTTP header.
+Real HTTP fixtures use a directory containing Chinese characters and check matching, exclusion and response privacy.
+All 208 offline tests passed after this repair.
+Evidence: `.bridge/observability-unicode-5329c689-85e8-467a-9117-4b02eaa7097f.log`.
+The reviewer accepted this repair; optional workspace metadata admission needs a separate follow-up.

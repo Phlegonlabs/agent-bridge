@@ -9,6 +9,7 @@ import { ModelRelay } from '../src/provider-relay.mjs';
 import { BridgeError } from '../src/profiles.mjs';
 import { readTaskStatus, watchTaskStatus } from '../src/task-status-client.mjs';
 import { DelegateRequests } from '../src/delegate-requests.mjs';
+import { workspaceTaskKey } from '../src/task-progress.mjs';
 
 function gate() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -19,7 +20,7 @@ async function eventually(work, check) {
   assert.fail(`State did not settle: ${JSON.stringify(value)}`);
 }
 async function fixture(work, fail = false) {
-  const state = await mkdtemp(path.join(tmpdir(), 'bridge-progress-'));
+  const state = await mkdtemp(path.join(tmpdir(), 'bridge-progress-香港-'));
   const config = await readProviderConfig(path.join(process.cwd(), 'config/native-provider.json'));
   config.fallback.enabled = false; config.limits.claude = 1;
   config.claudeDelegate = { attemptTimeoutMs: 1000, requestTimeoutMs: 5000 };
@@ -67,9 +68,9 @@ test('subagent task lookup survives disconnect and shows queued, native activity
     assert.equal(quiet.deadlineAt, task.deadlineAt);
     assert.doesNotMatch(JSON.stringify(quiet), /PRIVATE_CANARY|workflow-actor|sessionId|command/);
     assert.equal((await lookup('', { 'x-session-id': 'other' })).value.tasks.length, 0);
-    assert.equal((await lookup('', { 'x-agent-bridge-workspace': state })).value.tasks.length, 1);
-    assert.equal((await lookup('', { 'x-agent-bridge-workspace': path.join(state, 'other') })).value.tasks.length, 0);
-    assert.equal((await lookup('', { 'x-agent-bridge-workspace': '../private' })).status, 400);
+    assert.equal((await lookup('', { 'x-agent-bridge-workspace-key': workspaceTaskKey(state) })).value.tasks.length, 1);
+    assert.equal((await lookup('', { 'x-agent-bridge-workspace-key': workspaceTaskKey(path.join(state, 'other')) })).value.tasks.length, 0);
+    assert.equal((await lookup('', { 'x-agent-bridge-workspace-key': '../private' })).status, 400);
     assert.equal((await lookup('', { Authorization: 'Bearer wrong' })).status, 401);
     assert.equal((await lookup('', { Origin: 'https://example.test' })).status, 403);
     const joined = await request(); assert.equal(joined.headers.get('x-agent-bridge-task-id'), id);
@@ -98,6 +99,11 @@ test('status client reads existing credentials privately and never creates a tok
     const taskId = response.headers.get('x-agent-bridge-task-id');
     const value = await readTaskStatus({ state, config: file, taskId });
     assert.equal(value.tasks[0].state, 'running'); assert.doesNotMatch(JSON.stringify(value), new RegExp(token));
+    const matching = await readTaskStatus({ state, config: file, workspace: state });
+    assert.equal(matching.tasks.length, 1);
+    assert.equal(JSON.stringify(matching).includes(state), false);
+    assert.equal(JSON.stringify(matching).includes(workspaceTaskKey(state)), false);
+    assert.equal((await readTaskStatus({ state, config: file, workspace: path.join(state, 'other') })).tasks.length, 0);
     const absent = path.join(state, 'absent');
     await assert.rejects(readTaskStatus({ state: absent, config: file }), { code: 'STATUS_UNAVAILABLE' });
     await assert.rejects(readFile(path.join(absent, 'token')), { code: 'ENOENT' });

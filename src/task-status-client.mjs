@@ -20,7 +20,7 @@ export async function readTaskStatus({ taskId, sessionId, sessionType, workspace
     throw new BridgeError('INVALID_ARGUMENT', 'Choose a task ID or session headers.');
   }
   if (sessionId !== undefined) delegateSessionKey(sessionId, sessionType);
-  if (workspace !== undefined) workspaceTaskKey(workspace);
+  const workspaceKey = workspace === undefined ? undefined : workspaceTaskKey(workspace);
   const settings = await readProviderConfig(config);
   const tokenFile = path.join(state, 'token');
   let token;
@@ -33,7 +33,7 @@ export async function readTaskStatus({ taskId, sessionId, sessionType, workspace
   let response;
   try {
     response = await fetchImpl(`http://127.0.0.1:${settings.port}/v1/tasks${taskId ? `/${taskId}` : ''}`, {
-      headers: { Authorization: `Bearer ${token}`, ...(workspace === undefined ? {} : { 'x-agent-bridge-workspace': workspace }), ...(sessionId === undefined ? {} :
+      headers: { Authorization: `Bearer ${token}`, ...(workspaceKey === undefined ? {} : { 'x-agent-bridge-workspace-key': workspaceKey }), ...(sessionId === undefined ? {} :
         { 'x-session-id': sessionId, 'x-zcode-session-type': sessionType ?? 'chat' }) },
       redirect: 'error', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(5000)]) : AbortSignal.timeout(5000),
     });
