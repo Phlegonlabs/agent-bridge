@@ -141,7 +141,7 @@ export class ModelRelay {
           result = await this.call(routeId, correctiveRelayPrompt(body, nonce, error.message), attemptOptions);
           message = parseRelay(result.finalResponse ?? result.response, body, nonce);
         }
-        if (emittedText && (message.tool_calls?.length || typeof message.content !== 'string' ||
+        if (emittedText && (typeof message.content !== 'string' ||
             !message.content.startsWith(emittedText))) {
           throw new BridgeError('RELAY_STREAM_MISMATCH', 'The audited answer differs from its streamed text.');
         }

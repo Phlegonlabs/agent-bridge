@@ -232,15 +232,14 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       const result = completion(message, body.model, streamId);
       if (Buffer.byteLength(JSON.stringify(result)) > MAX_RESPONSE_BYTES) throw new BridgeError('RESPONSE_TOO_LARGE', 'Model response exceeds the local limit.');
       if (controller.signal.aborted) throw new BridgeError('REQUEST_TIMEOUT', 'The request deadline or client connection ended.');
-      if (route.provider === 'codex' && streamedText && (message.tool_calls?.length ||
+      if (route.provider === 'codex' && streamedText && (
           typeof message.content !== 'string' || !message.content.startsWith(streamedText))) {
         throw new BridgeError('RELAY_STREAM_MISMATCH', 'The audited answer differs from its streamed text.');
       }
       progress?.settle({ ok: true, code: 'VERIFIED', actualModel: answer.evidence?.actualModel });
       writeProgress();
       if (body.stream) {
-        if (message.tool_calls?.length) res.write(sse({ delta: { tool_calls: message.tool_calls.map((call, index) => ({ index, ...call })) }, finish_reason: null }));
-        else if (typeof message.content === 'string' && message.content !== streamedText) {
+        if (typeof message.content === 'string' && message.content !== streamedText) {
           // Deliver only what the stream has not already shown: a continued
           // (fallback) answer appends after the failed worker's partials.
           const extra = message.content.startsWith(streamedText)
@@ -248,6 +247,7 @@ export function createProviderServer({ config, token, relay, pool = new Provider
             : streamedText ? `\n\n${message.content}` : message.content;
           if (extra) res.write(sse({ delta: { content: extra }, finish_reason: null }));
         }
+        if (message.tool_calls?.length) res.write(sse({ delta: { tool_calls: message.tool_calls.map((call, index) => ({ index, ...call })) }, finish_reason: null }));
         res.write(sse({ delta: {}, finish_reason: message.tool_calls?.length ? 'tool_calls' : 'stop' }));
         res.end('data: [DONE]\n\n');
       }

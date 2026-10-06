@@ -28,7 +28,8 @@ async function fixture(work, mode = 'valid') {
     if (mode === 'tool') response = JSON.stringify({ nonce, content: null, tool_calls: [{ name: 'read_probe', arguments: { path: 'fixture' } }] });
     else if (mode === 'structured') { assert.equal(settings.onPartial, undefined); response = JSON.stringify({ nonce, content: '{}', tool_calls: [] }); }
     else {
-      const suffix = `second", "tool_calls": ${mode === 'bad-final' ? '[{"name":"undeclared","arguments":{}}]' : '[]'}}`;
+      const suffix = `second", "tool_calls": ${mode === 'bad-final' ? '[{"name":"undeclared","arguments":{}}]'
+        : mode === 'mixed' ? '[{"name":"read_probe","arguments":{"path":"fixture"}}]' : '[]'}}`;
       settings.onPartial?.(suffix); response = prefix + suffix;
     }
     return { ok: true, code: 'VERIFIED', response, runId: 'synthetic', actualModel: 'codex/gpt-6.1-sol', execution: { exitCode: 0 } };
@@ -118,19 +119,21 @@ test('Sol content rejection remains explicit and returns HTTP 400 before streami
   }, 'rejected');
 });
 
-test('tool envelopes and structured responses remain buffered and validated', async () => {
-  for (const mode of ['tool', 'structured']) await fixture(async ({ request, body, pending }) => {
-    const value = mode === 'tool' ? { ...body, tools: [{ type: 'function', function: { name: 'read_probe',
+test('validated tool calls retain accompanying content while structured responses stay buffered', async () => {
+  for (const mode of ['tool', 'structured', 'mixed']) await fixture(async ({ request, body, pending }) => {
+    const value = mode !== 'structured' ? { ...body, tools: [{ type: 'function', function: { name: 'read_probe',
       parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] } } }] }
       : { ...body, response_format: { type: 'json_object' } };
-    const response = await request(value); pending.resolve(); let content = '', calls = [], terminal;
-    for await (const frame of frames(response)) {
+    const response = await request(value), stream = frames(response); let content = '', calls = [], terminal;
+    if (mode === 'mixed') content = (await untilContent(stream)).text;
+    pending.resolve();
+    for await (const frame of stream) {
       content += frame.choices?.[0]?.delta?.content ?? ''; calls.push(...(frame.choices?.[0]?.delta?.tool_calls ?? []));
       if (frame.choices?.[0]?.finish_reason) terminal = frame.choices[0].finish_reason;
     }
-    assert.equal(content, mode === 'structured' ? '{}' : '');
-    assert.equal(terminal, mode === 'tool' ? 'tool_calls' : 'stop');
-    if (mode === 'tool') assert.equal(calls[0].function.name, 'read_probe');
+    assert.equal(content, mode === 'structured' ? '{}' : mode === 'mixed' ? 'first second' : '');
+    assert.equal(terminal, mode !== 'structured' ? 'tool_calls' : 'stop');
+    if (mode !== 'structured') assert.equal(calls[0].function.name, 'read_probe');
   }, mode);
 });
 

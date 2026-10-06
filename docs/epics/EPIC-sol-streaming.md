@@ -37,6 +37,12 @@ Installed Harness is `0.62.1`; loaded identity is unobserved. Shared AGENTS rule
 
 ## Verification and remaining work
 
+2026-10-05 — independent reviewer found a valid mixed content/tool envelope failed only in streaming mode at `ca889a4`.
+The repair retains streamed content and sends accompanying tool calls only after native and protocol validation.
+HTTP finalization sends any remaining content and validated calls independently. Invalid tool envelopes still fail without another attempt.
+The regression covers mixed envelopes before and after terminal validation. All 43 focused HTTP, provider and fallback tests passed, exit 0.
+Evidence: `.bridge/sol-mixed-caff2b4c-e7f1-4a3f-a3d6-d8f3524e26a8/stdout.log`.
+
 2026-10-05 — working-tree after `a37fb2b`: connect Codex content and status to HTTP, with bounded owned-prefix replay.
 Session-identified Codex turns retain one worker, task ID and deadline across identical reconnects.
 Changed active turns remain busy. Anonymous Codex and Cursor requests retain disconnect cancellation.
