@@ -1,6 +1,6 @@
 # Sol connection and streaming repair
 
-Status: implementation and verification in progress.
+Status: local implementation verified and independently reviewed; shared-service activation and desktop verification pending.
 
 The owner requested multi-agent diagnosis, connection repair and streaming on 2026-10-05.
 Repository: `agent-bridge`; branch: `codex/harness-refresh-0.61.0`.
@@ -102,3 +102,33 @@ The image caller selects its retained contract explicitly. Text relay callers re
 Model, effort, deadlines, process ownership, rollout verification and image-output proof remain required.
 All 26 focused Codex, RPC and image-evidence tests passed, exit 0. No new live image was generated.
 Evidence: `.bridge/sol-image-boundary-47f79df5-9247-4bd4-b5a0-a2bcb366ad5b/stdout.log`.
+
+## Current handoff
+
+Source candidate: `ebf485c08db4af885c9f5030d6156b5b0206fa08`; branch: `codex/harness-refresh-0.61.0`.
+The candidate worktree was clean. All 236 offline tests passed on Windows Node 24.19.0, exit 0.
+Evidence: `.bridge/sol-final-regression-a95d46b2-b093-4d2f-81fa-4672879b93d7/stdout.log`.
+The benign authenticated Sol/low HTTP probe returned 200 with verified model, completed status and successful SSE termination.
+It sent one 229-byte content delta and four status frames. First content arrived at 19,777 ms; completion took 20,164 ms.
+This single native trial does not prove multiple token chunks, sustained reliability or actual desktop rendering.
+Evidence: `.bridge/sol-final-native-72d1dd23-d368-4d85-869f-4bb603184510/stdout.log`.
+The temporary server on port 63854 closed. All finite check supervisors exited; this task leaves no temporary service running.
+The independent reviewer found three compatibility issues on `ca889a4`: mixed tool envelopes, admission retention and image transport.
+Repairs are `982d6b3`, `1c0c90a` and `ebf485c`.
+The independent GPT-6.1 Sol/xhigh reviewer accepted exact source candidate `ebf485c` with no remaining actionable findings.
+It performed read-only source review, with no tests, services or children. Test and native execution evidence belong to the parent.
+Reviewer backend identity was not exposed beyond the configured role. No fallback was used.
+
+Shared listener PID 18544 remains unchanged, with start time `2026-10-06T02:05:59.1817520Z` and command `node bin/provider.mjs`.
+Authenticated status observed zero active tasks, queued jobs and active delegates after verification.
+The loaded source identity is unknown. This task has not activated the candidate, changed accounts, replayed rejected tasks or pushed commits.
+Next action: separately authorize an idle-only authenticated shutdown and replacement on the same port, then verify the loaded source.
+Desktop Sol rendering remains an owner-visible acceptance check after activation.
+
+The current README pair, native-provider guide, compatibility evidence, index and Epic agree with this scoped result.
+No PRD, architecture or managed PLAN/RUN exists. No generated tasks view requires reconciliation.
+Installed Harness `0.62.1` template SHA-256: `feed8dcc70b3691d9822a1b05641d4502dae452fd1926954f09db3fc78fff62f`.
+Shared AGENTS rules are current by meaning; its local deployment section remains intact. Loaded skill identity is unobserved.
+The read-only document checker reports first-observation and loaded-identity review gaps, not a delivery approval.
+Evidence: `.bridge/sol-handoff-d9aba7c0-851c-4a27-8ec6-fc07b04e9445/stdout.json`.
+The existing `.bridge/`, `.env` and dependency ignore rules cover this task. New source and tests remain tracked.
