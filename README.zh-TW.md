@@ -1,10 +1,50 @@
+![Agent Bridge — 三條原生 CLI 路徑穿過玻璃橋樑，連接同一工作區](docs/assets/agent-bridge-cover.png)
+
 # Agent Bridge
 
-[English](README.md)
+**你的 CLI，同一個工作區。**
 
-讓 ZCode 連接你已安裝的 Codex、Cursor 和 Claude Code CLI。每個 CLI 保留自己的帳戶登入；GLM 使用 ZCode 原生帳戶連接，並可選用 profile 工作流。
+[English](README.md) · [快速開始](#快速開始) · [安裝教學](#1-安裝必要工具) · [疑難排解](#疑難排解) · [驗證狀態](docs/compatibility.md)
 
-這是本機 bridge，不是託管模型服務。它只監聽 `127.0.0.1`，驗證原生模型及 session 證據，並把憑證和執行紀錄存於已忽略的 `.bridge/`。它不會替你安裝上游應用程式，也不包含模型訂閱。
+讓 **ZCode** 連接你已安裝的 **Codex、Cursor 和 Claude Code** CLI。每個 CLI 使用現有的帳戶登入。
+GLM 維持 ZCode 原生連接，並可選用 profile 工作流。
+
+Agent Bridge 在你的電腦上執行，只監聽 `127.0.0.1`，接受結果前會檢查原生模型及 session 證據。
+憑證和執行紀錄存於已忽略的 `.bridge/`。上游應用程式及模型存取需另外準備。
+
+## 可以做甚麼
+
+- **在 ZCode 使用你的 CLI 模型。** 從模型選單選擇 provider、模型及支援的 reasoning level。
+- **把工作區任務交給 Claude。** Claude Code 在設定的檔案及指令權限內，使用自己的工具執行任務。
+- **追蹤長任務。** 查看標示清楚的執行狀態、接收 Codex 答案串流，並重連由 session 持有的任務。
+- **執行獨立工作流 jobs。** 使用儲存的 presets 或明確的 job assignments，限制並行數及執行期限。
+- **用 Codex 生成圖片。** 透過獨立圖片指令及現有 Codex 登入執行。
+
+Codex 和 Cursor 回傳文字或經驗證的工具呼叫，由 ZCode 執行工具；Claude 委派任務可修改工作區。
+Codex 串流文字在最終驗證前仍屬暫定結果，工具呼叫會等待驗證。
+
+## 快速開始
+
+你需要 **Git、Node.js 24+、ZCode**，以及至少一個可存取模型的支援 CLI。
+先開啟 ZCode 並完成首次設定，再按[必要工具教學](#1-安裝必要工具)安裝所選 CLI。
+
+```sh
+git clone https://github.com/Phlegonlabs/agent-bridge.git
+cd agent-bridge
+npm ci --ignore-scripts
+node bin/bridge.mjs setup
+node bin/provider.mjs
+```
+
+互動式引導會選擇 providers 及模型、提供登入，再儲存設定並註冊至 ZCode。
+儲存前檢查畫面列出的權限，並讓 provider 終端機保持執行。
+
+在 ZCode，Codex／Cursor 選 **Agent Bridge**，Claude 選 **Claude Bridge**，再選設定好的模型。
+Claude 要先開啟專案工作區。送出：**不要使用工具或改動檔案，只回覆 BRIDGE_PROBE_OK。**
+
+確認回覆；連接失敗時，參閱[疑難排解](#疑難排解)。按 Ctrl+C 停止前景 provider。
+
+> 以下模型 ID 都是範例。用 `models --provider PROVIDER` 查看本機 catalog，再驗證帳戶能否存取。
 
 ## 選擇連接方式
 
@@ -178,6 +218,8 @@ Standalone Claude 維持唯讀；可寫執行和持續 session 屬於已設定�
 
 ## 疑難排解
 
+### 重連既有任務
+
 有 session 識別的 Codex 請求及 Claude 長任務重連時，使用相同的 session headers、模型、effort 及請求內容。
 Bridge 會接回原本的任務，切換串流或一次回傳也適用。
 已完成的重複請求會回傳已驗證結果，不會再啟動 worker。
@@ -185,14 +227,28 @@ Bridge 會接回原本的任務，切換串流或一次回傳也適用。
 關閉連線只會離開等待；worker 會繼續至完成、期限到達，或通過驗證的 provider shutdown。
 重連不會重設期限，provider shutdown 會等待 worker cleanup 完成。
 服務崩潰後，未完成的 session 必須先檢查，再進行 recovery。
+
+### 查看進度
+
 通過驗證的 `/status` 會顯示執行中的 delegate jobs、等待連線及暫存結果數。
-使用 `node bin/bridge.mjs status --watch` 查看個別 workflow actor 與 subagent 請求。
-可用 `--task-id UUID` 或 `--session-id ID --session-type subagent` 篩選。
-使用 `--cwd 絕對專案路徑` 比對呼叫端宣告的工作目錄。
+使用 CLI 查看個別 workflow actor 與 subagent 請求：
+
+```sh
+node bin/bridge.mjs status --watch
+node bin/bridge.mjs status --task-id UUID
+node bin/bridge.mjs status --session-id ID --session-type subagent --watch
+node bin/bridge.mjs status --cwd /absolute/project/path --watch
+```
+
+專案查詢比對請求宣告的工作目錄；請把範例路徑換成你的絕對專案路徑。
+自訂 provider 設定請加上 `--config FILE`。
 任務 ID 由回應 header `X-Agent-Bridge-Task-Id` 提供。
 狀態分開顯示排隊、worker 啟動、最後觀察到的原生活動、cleanup 與最終驗證結果。
 Heartbeat 和查詢不更新活動時間；安靜一段時間不會觸發重跑。
 監看預設十分鐘後結束；Ctrl+C 只停止監看。
+
+### 串流及保留結果
+
 由 bridge 持有執行權的 Claude 串流，會在 ZCode 的 Thought 區顯示任務狀態、已用時間與最近活動。
 Codex 串流會顯示相同的標示狀態及原生答案增量；重連會重播保留的答案前段。
 工具呼叫及結構化回覆會等待驗證。已顯示部分文字後的失敗，不會觸發格式重試或 fallback。
@@ -204,6 +260,8 @@ Workflow 狀態是最後記錄的快照，不能證明舊程序仍在執行。
 結果最多暫存 15 分鐘，並受數量及記憶體上限限制。
 已完成的 Claude receipt 也能在暫存到期或服務重啟後回傳結果。
 HTTP 重連不能保證主程式畫面只顯示一次結果。
+
+### 常見錯誤
 
 | 結果 | 下一步 |
 | --- | --- |
@@ -219,6 +277,17 @@ HTTP 重連不能保證主程式畫面只顯示一次結果。
 | CLI 正常，但 ZCode 無法連接 | 確認 provider 已啟動、選對已註冊的 provider／模型，並讓 `localhost,127.0.0.1` bypass proxy。 |
 
 可選環境變數：`ZCODE_BRIDGE_CLI`（官方 `zcode.cjs`）、`CLAUDE_BRIDGE_BIN`／`CODEX_BRIDGE_BIN`（原生 executable）、`CURSOR_BRIDGE_BIN`（官方 `agent` executable）、`CURSOR_BRIDGE_DIR`（官方 runtime 套件目錄）及 `CODEX_HOME`（既有 Codex state）。在執行 setup／provider 的終端機設定，Bridge 不會改寫 shell profile。Linux AppImage 使用者可先 extract 應用程式，再把 `ZCODE_BRIDGE_CLI` 指向它的 `resources/glm/zcode.cjs`。
+
+## 詳細教學
+
+| 教學 | 適用情況 |
+| --- | --- |
+| [Native provider](docs/native-provider.md) | 路由、權限、串流、session recovery 及任務狀態 |
+| [Workflow presets](docs/workflow-presets.md) | 批次 jobs、模型選擇、期限及 preset fallback |
+| [Cursor CLI](docs/cursor.md) | Cursor runtime 偵測、trust 及原生模型證據 |
+| [Compatibility](docs/compatibility.md) | 離線、已登入 CLI 及桌面驗證的證據界線 |
+| [本機部署](docs/DEPLOYMENT.md) | 已記錄的來源版本、私人狀態及明確重新啟動 |
+| [文件索引](docs/DOCUMENTS.md) | 所有教學及實作紀錄 |
 
 ## 開發及驗證證據
 
