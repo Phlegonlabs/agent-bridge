@@ -14,6 +14,7 @@ import { normalizeClaudeExecution } from './claude-permissions.mjs';
 import { providerConfigPath } from './provider-config-path.mjs';
 import { hash } from './profiles.mjs';
 import { TaskStatuses, taskIdPattern, workspaceTaskKey } from './task-progress.mjs';
+import { ProgressStream } from './progress-stream.mjs';
 export const providerState = path.join(bridgeRoot, '.bridge', 'provider');
 export async function localToken(state = providerState) {
   await mkdir(state, { recursive: true, mode: 0o700 });
@@ -183,16 +184,24 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       const sse = delta => `data: ${JSON.stringify({ id: streamId, object: 'chat.completion.chunk', created: streamCreated, model: body.model,
         choices: [{ index: 0, ...delta }] })}\n\n`;
       let streamedText = '';
+      const progressStream = owned && body.stream ? new ProgressStream() : null;
+      const writeProgress = () => {
+        if (!progressStream || res.destroyed || res.writableNeedDrain) return;
+        const text = progressStream.next(statuses.get(attachment.taskId));
+        if (text) res.write(sse({ delta: { reasoning_content: text }, finish_reason: null }));
+      };
       const onContentDelta = !owned && body.stream && !body.response_format
         ? text => { streamedText += text; if (!res.destroyed && !controller.signal.aborted) res.write(sse({ delta: { content: text }, finish_reason: null })); }
         : undefined;
       if (body.stream) {
         res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' }); res.flushHeaders();
         res.write(sse({ delta: { role: 'assistant', content: '' }, finish_reason: null }));
+        writeProgress();
         // Some clients drop streams whose idle timers only reset on data
         // events (SSE comments do not count). An empty content delta is a
         // protocol-legal no-op for rendering but reads as activity.
         heartbeat = setInterval(() => { if (!res.destroyed && !res.writableNeedDrain) {
+          writeProgress();
           res.write(': waiting for CLI model\n\n');
           res.write(sse({ delta: { content: '' }, finish_reason: null }));
         } }, heartbeatMs);
@@ -201,6 +210,7 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       if (attachment) {
         const outcome = await attachment.outcome;
         if (outcome.detached) return;
+        writeProgress();
         if (outcome.error) throw outcome.error;
         answer = outcome.result;
       } else answer = await relay.complete(body, { signal: controller.signal, onContentDelta, transport, progress });

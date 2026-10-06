@@ -51,6 +51,73 @@ async function fixture(work, fail = false) {
   finally { pending.resolve(); await server.shutdown(); await rm(state, { recursive: true, force: true }); }
 }
 
+async function* frames(response) {
+  const reader = response.body.getReader(), decoder = new TextDecoder(); let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      buffer += decoder.decode(value, { stream: true });
+      let end;
+      while ((end = buffer.indexOf('\n\n')) >= 0) {
+        const frame = buffer.slice(0, end); buffer = buffer.slice(end + 2);
+        if (!frame.startsWith('data: ') || frame === 'data: [DONE]') continue;
+        yield JSON.parse(frame.slice(6));
+      }
+    }
+  } finally { reader.releaseLock(); }
+}
+
+test('native Agent streams visible status before results and reconnects without executing twice', async () => {
+  await fixture(async ({ pool, request, pending, started, calls, lookup }) => {
+    const release = await pool.acquire('claude'), controller = new AbortController();
+    let response, stream, firstId;
+    try {
+      response = await request(controller.signal); firstId = response.headers.get('x-agent-bridge-task-id');
+      stream = frames(response);
+      let queued = '';
+      while (!queued.includes('排隊中')) {
+        const { value } = await stream.next(), delta = value.choices[0].delta;
+        assert.ok(!delta.content); queued += delta.reasoning_content ?? '';
+      }
+      assert.match(queued, /Agent Bridge 執行狀態/);
+      assert.doesNotMatch(queued, /PRIVATE_CANARY|workflow-actor|native-run/);
+    } finally { release(); controller.abort(); await stream?.return(); }
+    await started.promise;
+    const task = (await lookup(`/${firstId}`)).value.tasks[0];
+    const joined = await request(); assert.equal(joined.headers.get('x-agent-bridge-task-id'), firstId);
+    const joinedFrames = frames(joined); let status = '', content = '';
+    while (!status.includes('工具開始執行')) {
+      const { value } = await joinedFrames.next(), delta = value.choices[0].delta;
+      status += delta.reasoning_content ?? ''; content += delta.content ?? '';
+    }
+    assert.match(status, /執行中/); assert.equal(content, '');
+    assert.equal((await lookup(`/${firstId}`)).value.tasks[0].deadlineAt, task.deadlineAt);
+    pending.resolve();
+    for await (const frame of joinedFrames) {
+      status += frame.choices[0].delta.reasoning_content ?? '';
+      content += frame.choices[0].delta.content ?? '';
+    }
+    assert.equal(content, 'audited answer'); assert.match(status, /執行已結束/);
+    assert.doesNotMatch(status, /PRIVATE_CANARY|workflow-actor|native-run|audited answer/);
+    assert.equal(calls(), 1);
+  });
+});
+
+test('native Agent status reports audit failure without streaming an unverified answer', async () => {
+  await fixture(async ({ request, pending, started }) => {
+    const response = await request(); await started.promise; pending.resolve();
+    let status = '', content = '', failure;
+    for await (const frame of frames(response)) {
+      if (frame.error) { failure = frame.error; continue; }
+      const delta = frame.choices[0].delta;
+      status += delta.reasoning_content ?? ''; content += delta.content ?? '';
+    }
+    assert.match(status, /執行失敗/); assert.equal(content, '');
+    assert.equal(failure.code, 'CLAUDE_MODEL_MISMATCH');
+  }, true);
+});
+
 test('subagent task lookup survives disconnect and shows queued, native activity and audited completion', async () => {
   await fixture(async ({ pool, lookup, request, pending, started, calls, state }) => {
     const release = await pool.acquire('claude');

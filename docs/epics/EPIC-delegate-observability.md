@@ -17,6 +17,16 @@ The parent is the only writer. Independent helpers reviewed the workflow and pro
 - OBS-005: persist bounded workflow snapshots and report execution status before final results.
 - OBS-006: expose no prompts, reasoning text, tool arguments, commands, credentials or native session IDs.
 
+Accepted follow-up on 2026-10-05: show OBS-001/OBS-002 status during native Claude Agent tasks.
+The owner confirmed native Agent dispatch, rather than the saved workflow.
+Use labelled status in ZCode's existing Thought stream. Preserve final answer text and execution ownership.
+The installed host has no separate provider progress channel. Native reasoning remains private.
+This adds no application markup or styling. The UI impact in this repository is `none`.
+Write scope: provider status streaming, focused tests, this Epic and the native-provider guide.
+Acceptance: pending status appears before the result; reconnects retain one worker; final content stays unchanged.
+Verify queueing, silence, terminal audit failure, privacy and bounded display output.
+Installed desktop rendering remains a separate acceptance check. No push or configuration migration is authorized.
+
 Silence does not authorize reruns, fallback, cancellation or recovery.
 The existing audit, cleanup and permission contracts remain authoritative.
 Status records are observations, not proof that useful work or the assignment is complete.
@@ -176,3 +186,18 @@ No task was cancelled or manually replayed. No configuration or credential file 
 Private evidence: `.bridge/provider-restart-e5607001-2821-4d2e-973a-34f6cbae2dc7/`.
 This follow-up changes operational documentation only. Real desktop long-task validation remains pending.
 Installed Harness remains 0.62.1; its unchanged shared template still matches AGENTS by meaning.
+
+2026-10-05 — working-tree from `86fd208`: connect owned Claude streams to visible status.
+Scope: `src/progress-stream.mjs`, `src/provider-server.mjs`, focused tests and `docs/native-provider.md`.
+The installed ZCode 3.14.4.7912 parser maps `reasoning_content` to reasoning runtime events.
+Each message identifies Agent Bridge status. No native reasoning or worker payload enters this channel.
+Existing heartbeats read status; disconnects detach observers without restarting execution.
+Focused tests, independent review, runtime activation and desktop rendering remain pending.
+
+The focused check passed 34 tests. The full offline suite passed 214 tests on Node 24.19.0.
+Evidence: `.bridge/native-inline-focused-177ed15b-2f85-4063-83b6-3dd209077da7.log` and
+`.bridge/native-inline-regression-22309495-4d59-407e-95f9-79c4f17a6e73/`.
+Checks cover visible pending status, reconnect identity, unchanged final content, audit failure and privacy.
+The synthetic native-host probe initially lacked a selected model, then omitted Agent's required description.
+These fixture errors launched no external worker. The corrected isolated probe remains pending.
+Existing `.bridge/` ignore rules cover fixture state and logs. No new artifact class needs an ignore rule.
