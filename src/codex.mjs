@@ -4,11 +4,11 @@ import { randomUUID } from 'node:crypto';
 import { bridgeRoot } from './account.mjs';
 import { BridgeError, hash } from './profiles.mjs';
 import { runProcess } from './process.mjs';
-import { createCodexAudit } from './codex-audit.mjs';
+import { createCodexAppServer } from './codex-app-server.mjs';
+import { codexIsolationArgs } from './codex-isolation.mjs';
 import { codexHomeDirectory, codexModelCatalog, normalizeEffortValue, selectCodexModel } from './model-options.mjs';
 import { nativeExecutable } from './runtime-paths.mjs';
 import { notifyProgress } from './task-progress.mjs';
-import { observeNativeProgress } from './native-progress.mjs';
 
 
 // Node spawns without a shell, so an npm launcher shim cannot be executed
@@ -18,12 +18,13 @@ export async function codexRuntime(resolved = process.env.CODEX_BRIDGE_BIN) {
   return { command, prefix: [], env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '0' } };
 }
 
-// exec --json events never name the model; the persisted session rollout does.
+// Persisted turn context independently confirms app-server dispatch metadata.
 // Locate rollout-<timestamp>-<threadId>.jsonl and confirm its turn_context model.
-async function verifyRollout(threadId, codexHome = codexHomeDirectory()) {
+async function verifyRollout(threadId, codexHome = codexHomeDirectory(), deadline = Infinity) {
   const pattern = path.join(codexHome, 'sessions', '*', '*', '*', `rollout-*-${threadId}.jsonl`)
     .split(path.sep).join('/');
   for (let attempt = 0; attempt < 3; attempt++) {
+    if (Date.now() >= deadline) throw new BridgeError('TIMEOUT', 'Codex verification exhausted the run deadline.');
     const files = [];
     for await (const entry of glob(pattern)) files.push(entry);
     if (files.length > 1) throw new BridgeError('CODEX_SESSION_UNVERIFIED', 'Multiple rollout files claim this thread.');
@@ -47,12 +48,12 @@ async function verifyRollout(threadId, codexHome = codexHomeDirectory()) {
           reportedEffort: reportedEfforts.size === 1 ? reportedEfforts.values().next().value : undefined };
       }
     }
-    if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 500));
+    if (attempt < 2) await new Promise(resolve => setTimeout(resolve, Math.min(500, Math.max(0, deadline - Date.now()))));
   }
   return { sessionConfirmed: false, reportedModel: undefined };
 }
 
-export async function runCodex({ cwd, task, model, effort, timeoutMs = 60000, signal, codexBin, onProgress }) {
+export async function runCodex({ cwd, task, model, effort, timeoutMs = 60000, signal, codexBin, onProgress, onPartial }) {
   if (typeof model !== 'string' || !model || model === 'auto') throw new BridgeError('CODEX_MODEL_REQUIRED', 'Choose an explicit Codex model id, for example gpt-6.1-sol.');
   if (typeof task !== 'string' || !task.trim() || Buffer.byteLength(task) > 4 * 1024 * 1024) {
     throw new BridgeError('INVALID_TASK', 'Task must be 1..4194304 bytes.');
@@ -74,24 +75,19 @@ export async function runCodex({ cwd, task, model, effort, timeoutMs = 60000, si
   await writeFile(path.join(logs, 'request.json'), JSON.stringify({ runId, provider: 'codex', model,
     requestedEffort, catalogDefaultEffort: selected.defaultEffort,
     taskSha256: hash(task), mode: 'read-only', timeoutMs }, null, 2), { flag: 'wx', mode: 0o600 });
-  const audit = createCodexAudit(model, requestedEffort);
+  const isolation = await codexIsolationArgs(runtime, workspace, logs, deadline, signal);
+  const audit = createCodexAppServer({ model, effort: requestedEffort, cwd: workspace, task, onPartial, onProgress });
   const remainingMs = deadline - Date.now();
   if (remainingMs < 100) throw new BridgeError('TIMEOUT', 'Codex preflight exhausted the run deadline.');
-  // mcp_servers={} drops configured MCP servers: headless workers must not carry
-  // the interactive account's MCP tools, and their OAuth handshake logs noise.
   const execution = await runProcess({ command: runtime.command, cwd: workspace, env: runtime.env,
-    args: [...runtime.prefix, 'exec', '--json', '--color', 'never', '-s', 'read-only',
-      '--skip-git-repo-check', '-C', workspace, '-m', model,
-      ...(requestedEffort !== null ? ['-c', `model_reasoning_effort="${requestedEffort}"`] : []),
-      '-c', 'mcp_servers={}',
-      '--', '-'],
-    timeoutMs: remainingMs, signal, stdinText: task,
+    args: [...runtime.prefix, 'app-server', '--stdio', ...isolation],
+    timeoutMs: remainingMs, signal, onStdin: audit.start,
     stdoutPath: path.join(logs, 'events.jsonl'), stderrPath: path.join(logs, 'stderr.log'),
     onProgress: event => notifyProgress(onProgress, { ...event, runId }),
-    onLine: line => { audit.ingest(line); notifyProgress(() => observeNativeProgress('codex', line, onProgress)); } });
+    onLine: audit.onLine });
   // A missing or ambiguous rollout means the dispatch cannot be verified; the
   // audit then fails CODEX_SESSION_UNVERIFIED instead of guessing.
-  const rollout = await verifyRollout(audit.threadId, codexHome)
+  const rollout = await verifyRollout(audit.threadId, codexHome, deadline)
     .catch(() => ({ sessionConfirmed: false, reportedModel: undefined, reportedEffort: undefined }));
   const report = { schema: 'agent-bridge/result/1', runId, ...audit.finish(execution, rollout), mode: 'read-only', execution, logs };
   await writeFile(path.join(logs, 'result.json'), JSON.stringify(report, null, 2), { flag: 'wx', mode: 0o600 });

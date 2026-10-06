@@ -34,19 +34,31 @@ async function codexFixture({ reconnect = false } = {}) {
     JSON.stringify({ type: 'session_meta', payload: { session_id: 'fake-thread' } }),
     JSON.stringify({ type: 'turn_context', payload: { model, effort: 'high' } }),
   ].join('\n') + '\n');
-  // The fake native runtime is Node itself. It finds this extensionless `exec`
-  // script, consumes stdin, and reports both argument vector and prompt evidence.
-  await writeFile(path.join(workspace, 'exec'), `
+  await writeFile(path.join(workspace, 'mcp'), "console.log('[]');\n");
+  // Node stands in for the native app-server. The fixture uses the observed RPC
+  // lifecycle and emits real deltas before its terminal item.
+  await writeFile(path.join(workspace, 'app-server'), `
+const readline = require('node:readline');
 const args = process.argv.slice(2);
-let prompt = '';
-process.stdin.setEncoding('utf8');
-process.stdin.on('data', chunk => { prompt += chunk; });
-process.stdin.on('end', () => {
-  const event = value => process.stdout.write(JSON.stringify(value) + '\\n');
-  event({ type: 'thread.started', thread_id: 'fake-thread' });
-  if (${reconnect}) event({ type: 'error', message: 'Reconnecting... 2/5 (unexpected status 502 Bad Gateway: Our servers are currently overloaded. Please try again later.)' });
-  event({ type: 'item.completed', item: { type: 'agent_message', text: JSON.stringify({ args, prompt }) } });
-  event({ type: 'turn.completed', usage: {} });
+const event = value => process.stdout.write(JSON.stringify(value) + '\\n');
+const notify = (method, params) => event({method, params});
+readline.createInterface({input: process.stdin}).on('line', line => {
+  const request = JSON.parse(line);
+  if(request.method === 'initialize') event({id:request.id,result:{userAgent:'fixture'}});
+  if(request.method === 'thread/start') event({id:request.id,result:{thread:{id:'fake-thread'},
+    model:'${model}',reasoningEffort:'high',cwd:process.cwd(),sandbox:{type:'readOnly'},approvalPolicy:'never'}});
+  if(request.method === 'turn/start') {
+    const ids={threadId:'fake-thread',turnId:'turn'};
+    event({id:request.id,result:{turn:{id:'turn',status:'inProgress',items:[]}}});
+    notify('turn/started',{threadId:'fake-thread',turn:{id:'turn',status:'inProgress',items:[]}});
+    if (${reconnect}) notify('error',{...ids,willRetry:true,error:{message:'Server overloaded',codexErrorInfo:'serverOverloaded'}});
+    const text=JSON.stringify({args,prompt:request.params.input[0].text,effort:request.params.effort});
+    notify('item/started',{...ids,item:{id:'answer',type:'agentMessage',text:''}});
+    notify('item/agentMessage/delta',{...ids,itemId:'answer',delta:text.slice(0,10)});
+    notify('item/agentMessage/delta',{...ids,itemId:'answer',delta:text.slice(10)});
+    notify('item/completed',{...ids,item:{id:'answer',type:'agentMessage',text}});
+    notify('turn/completed',{threadId:'fake-thread',turn:{id:'turn',status:'completed',items:[]}});
+  }
 });
 `);
   return { home, workspace, runtime };
@@ -182,7 +194,7 @@ test('runCodex validates model, task, and timeout before touching the runtime', 
   await assert.rejects(runCodex({ cwd: '.', task: 'x', model, timeoutMs: 700000 }), { code: 'INVALID_TIMEOUT' });
 });
 
-test('runCodex validates catalog effort and forwards the exact config override', async () => {
+test('runCodex validates catalog effort and forwards exact RPC input with incremental text', async () => {
   const { home, workspace, runtime } = await codexFixture();
   await withCodexHome(home, async () => {
     await assert.rejects(runCodex({ cwd: workspace, task: 'test', model, effort: 'FAST' }),
@@ -190,19 +202,22 @@ test('runCodex validates catalog effort and forwards the exact config override',
     await assert.rejects(runCodex({ cwd: workspace, task: 'test', model, effort: 'ultra' }),
       { code: 'CODEX_EFFORT_UNAVAILABLE' });
     const task = 'x'.repeat(32769);
-    const requested = await runCodex({ cwd: workspace, task, model, effort: 'high', timeoutMs: 1000, codexBin: runtime });
+    const partials = [];
+    const requested = await runCodex({ cwd: workspace, task, model, effort: 'high', timeoutMs: 1000, codexBin: runtime,
+      onPartial: text => partials.push(text) });
     assert.equal(requested.ok, true);
     assert.equal(requested.code, 'VERIFIED');
     assert.equal(requested.actualEffort, 'high');
     const events = (await readFile(path.join(requested.logs, 'events.jsonl'), 'utf8')).trim()
       .split('\n').map(line => JSON.parse(line));
-    const evidence = JSON.parse(events.find(event => event.type === 'item.completed').item.text);
+    const evidence = JSON.parse(events.find(event => event.method === 'item/completed').params.item.text);
     const args = evidence.args;
-    assert.equal(args.at(-1), '-');
+    assert.equal(args.includes('--stdio'), true);
     assert.equal(args.includes(task), false);
     assert.equal(evidence.prompt, task);
-    const overrideAt = args.indexOf('-c');
-    assert.equal(args[overrideAt + 1], 'model_reasoning_effort="high"');
+    assert.equal(evidence.effort, 'high');
+    assert.equal(partials.length, 2); assert.equal(partials.join(''), requested.response);
+    assert.ok(args.includes('features.shell_tool=false')); assert.ok(args.includes('features.plugins=false'));
     assert.equal(JSON.parse(await readFile(path.join(requested.logs, 'request.json'), 'utf8')).requestedEffort, 'high');
 
     const defaulted = await runCodex({ cwd: workspace, task: 'test', model, timeoutMs: 1000, codexBin: runtime });
@@ -210,8 +225,8 @@ test('runCodex validates catalog effort and forwards the exact config override',
     assert.equal(defaulted.actualEffort, 'high');
     const defaultEvents = (await readFile(path.join(defaulted.logs, 'events.jsonl'), 'utf8')).trim()
       .split('\n').map(line => JSON.parse(line));
-    const defaultArgs = JSON.parse(defaultEvents.find(event => event.type === 'item.completed').item.text).args;
-    assert.equal(defaultArgs.includes('model_reasoning_effort="high"'), false);
+    const defaultEvidence = JSON.parse(defaultEvents.find(event => event.method === 'item/completed').params.item.text);
+    assert.equal(defaultEvidence.effort, undefined);
     assert.equal(JSON.parse(await readFile(path.join(defaulted.logs, 'request.json'), 'utf8')).requestedEffort, null);
   });
 });

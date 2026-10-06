@@ -37,6 +37,24 @@ Installed Harness is `0.62.1`; loaded identity is unobserved. Shared AGENTS rule
 
 ## Verification and remaining work
 
+2026-10-05 — working-tree after `a16d1c9`: replace the Codex exec transport with task-owned app-server stdio.
+Native notifications validate thread, turn and item identity. Dispatch model, effort, cwd and policy are checked before generation.
+Completed native text must match its deltas. Persisted rollout evidence still verifies model and effort after process exit.
+MCP names and transport kinds are inventoried locally. Invocation overrides disable configured MCP servers, apps, plugins and execution tools.
+Native approval requests, forbidden tool starts and unexpected MCP startup fail closed.
+Two initial isolation probes failed because incomplete MCP overrides lacked valid transport fields.
+A corrected native probe verified disabled tools and clean stdin-close termination without changing account configuration.
+Evidence: `.bridge/sol-native-probe-8c879430-e88e-4d33-9c6b-5dbf72d856a4/`.
+All 23 focused RPC, Codex and process-input tests passed before the final deadline adjustment.
+Evidence: `.bridge/sol-rpc-db8a4ff0-3a08-4620-b0f2-f91fd0011d04/stdout.log`.
+A benign authenticated request passed model, effort, rollout and exit checks on `gpt-6.1-sol` / `low`.
+It observed one 251-byte native delta before completion; it does not prove multiple token chunks or desktop rendering.
+Evidence: `.bridge/runs/eb9b0682-64de-4d41-a607-2691442150b4/`.
+The final native-adapter check passed the same 23 tests after the deadline adjustment.
+Evidence: `.bridge/sol-rpc-final-af24bd0d-2b1a-4cef-b5af-d47df31e2b96/stdout.log`.
+Relay envelope streaming, HTTP status, final regression and independent review remain pending.
+External documentation commit `58e8154` was observed and preserved; this round did not restart the provider.
+
 2026-10-05 — working-tree after `b967f46`: add bounded interactive stdin to the existing owned-process runner.
 The same timeout, cancellation, log drainage and identity-checked cleanup apply to native RPC processes.
 Static and interactive input are mutually exclusive. No second process supervisor or persistent app-server is introduced.
