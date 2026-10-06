@@ -178,9 +178,9 @@ Standalone Claude 維持唯讀；可寫執行和持續 session 屬於已設定�
 
 ## 疑難排解
 
-Claude 長任務重連時，使用相同的 session headers、模型、effort 及請求內容。
+有 session 識別的 Codex 請求及 Claude 長任務重連時，使用相同的 session headers、模型、effort 及請求內容。
 Bridge 會接回原本的任務，切換串流或一次回傳也適用。
-已完成的重複請求會回傳已驗證結果，不會再次執行 Claude。
+已完成的重複請求會回傳已驗證結果，不會再啟動 worker。
 同一 session 的其他執行中 turn 會收到 `SESSION_BUSY`。
 關閉連線只會離開等待；worker 會繼續至完成、期限到達，或通過驗證的 provider shutdown。
 重連不會重設期限，provider shutdown 會等待 worker cleanup 完成。
@@ -194,7 +194,9 @@ Bridge 會接回原本的任務，切換串流或一次回傳也適用。
 Heartbeat 和查詢不更新活動時間；安靜一段時間不會觸發重跑。
 監看預設十分鐘後結束；Ctrl+C 只停止監看。
 由 bridge 持有執行權的 Claude 串流，會在 ZCode 的 Thought 區顯示任務狀態、已用時間與最近活動。
-其他原生路由可能只顯示最終答案；可獨立查詢任務狀態。
+Codex 串流會顯示相同的標示狀態及原生答案增量；重連會重播保留的答案前段。
+工具呼叫及結構化回覆會等待驗證。已顯示部分文字後的失敗，不會觸發格式重試或 fallback。
+Codex 重播資料會隨記憶體暫存到期或 provider 重啟失效；任務狀態仍可獨立查詢。
 CLI workflow batch 可用 `status --workflow-id UUID --watch`；UUID 會出現在進度輸出。
 已保存的 `model-bridge` workflow 在等待結果期間會報告各 job 狀態。
 Standalone CLI worker 把整理後的進度寫入 stderr，stdout 保留最終 JSON。
@@ -209,6 +211,7 @@ HTTP 重連不能保證主程式畫面只顯示一次結果。
 | `AUTH_REQUIRED` | 登入該 provider，再執行 doctor。 |
 | `ZCODE_CONFIG_REQUIRED` | 註冊前先開啟 ZCode 並完成首次設定。 |
 | `CODEX_MODEL_CATALOG_UNAVAILABLE` | 登入後開啟官方 Codex CLI，讓它建立本機 cache。 |
+| `CODEX_CONTENT_REJECTED` | 上游拒絕了請求內容。Bridge 不會重跑請求或繞過拒絕。 |
 | `MODEL_UNAVAILABLE`／reasoning error | 重新列出模型，選完整 ID 及已宣告的 reasoning strength。 |
 | `PORT_IN_USE` | 檢查 listener，重用或明確停止正確的 provider，再重新啟動。 |
 | `AGENT_NOT_FOUND`／`PROFILE_NOT_READ_ONLY` | 安裝及檢查通用 plan-mode profiles，或明確選擇既有相容 profile。 |

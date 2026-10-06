@@ -52,14 +52,20 @@ export class DelegateRequests {
       if (this.#active.size >= this.#limits.limit) throw new BridgeError('QUEUE_FULL', 'Too many owned delegate requests.');
       const controller = new AbortController();
       const progress = this.statuses.create({ ...metadata, deadlineAt: this.#limits.now() + timeoutMs }, sessionKey, workspaceKey);
-      entry = { fingerprint, controller, progress, waiters: new Set(), outcome: null };
+      entry = { fingerprint, controller, progress, waiters: new Set(), subscribers: new Set(), partial: '', partialBytes: 0, outcome: null };
       this.#entries.set(key, entry); this.#active.set(sessionKey, entry);
       controller.signal.addEventListener('abort', () => progress.update({ type: 'stopping' }), { once: true });
       const timer = setTimeout(() => controller.abort(new BridgeError('REQUEST_TIMEOUT', 'The delegate request deadline ended.')), timeoutMs);
       // Insertion precedes execution, including concurrent retries in this turn.
       const job = Promise.resolve().then(() => {
         controller.signal.throwIfAborted();
-        return start(controller.signal, progress);
+        return start(controller.signal, progress, text => {
+          if (typeof text !== 'string' || entry.partialBytes + Buffer.byteLength(text) > 512 * 1024) {
+            throw new BridgeError('RESPONSE_TOO_LARGE', 'Owned streamed response exceeds the local limit.');
+          }
+          entry.partial += text; entry.partialBytes += Buffer.byteLength(text);
+          for (const subscriber of entry.subscribers) { try { subscriber(text); } catch {} }
+        });
       }).then(result => ({ result }), error => ({ error })).then(outcome => {
         clearTimeout(timer);
         const retryableAdmission = !controller.signal.aborted && outcome.error?.nativeExecutionStarted === false &&
@@ -74,19 +80,27 @@ export class DelegateRequests {
         entry.outcome = outcome; entry.finishedAt = this.#limits.now();
         progress.settle({ ok: !outcome.error, code: outcome.error?.code ?? outcome.result?.code ?? 'VERIFIED',
           actualModel: outcome.result?.actualModel, recoveryRequired });
-        entry.bytes = Buffer.byteLength(JSON.stringify(outcome));
+        entry.bytes = Buffer.byteLength(JSON.stringify(outcome)) + entry.partialBytes;
         this.#active.delete(sessionKey);
         if (retryableAdmission) this.#entries.delete(key);
         for (const waiter of entry.waiters) { this.#waiters--; waiter(outcome); }
-        entry.waiters.clear(); this.#prune();
+        entry.waiters.clear(); entry.subscribers.clear(); this.#prune();
       }).finally(() => this.#jobs.delete(job));
       this.#jobs.add(job);
     }
-    if (entry.outcome) return { taskId: entry.progress.record.taskId, outcome: Promise.resolve(entry.outcome), detach() {} };
+    if (entry.outcome) return { taskId: entry.progress.record.taskId, outcome: Promise.resolve(entry.outcome),
+      subscribe(observer) { if (entry.partial) observer(entry.partial); }, detach() {} };
     let resolve;
     const outcome = new Promise(done => { resolve = done; });
     entry.waiters.add(resolve); this.#waiters++;
-    return { taskId: entry.progress.record.taskId, outcome, detach: () => {
+    let observer;
+    return { taskId: entry.progress.record.taskId, outcome, subscribe(callback) {
+      if (observer) entry.subscribers.delete(observer);
+      observer = callback;
+      if (entry.partial) callback(entry.partial);
+      if (!entry.outcome) entry.subscribers.add(callback);
+    }, detach: () => {
+      if (observer) entry.subscribers.delete(observer);
       if (entry.waiters.delete(resolve)) { this.#waiters--; resolve({ detached: true }); }
     } };
   }

@@ -81,7 +81,7 @@ test('server shutdown awaits detached delegate cleanup', async () => {
   });
 });
 
-test('ordinary relay requests still cancel on HTTP disconnect', async () => {
+test('Cursor relay requests still cancel on HTTP disconnect', async () => {
   await fixture(async ({ request, body, relay }) => {
     const started = gate(), aborted = gate();
     relay.complete = async (_body, { signal }) => {
@@ -89,7 +89,7 @@ test('ordinary relay requests still cancel on HTTP disconnect', async () => {
       aborted.resolve(); throw new Error('cancelled');
     };
     const controller = new AbortController();
-    const response = await request({ ...body, model: 'gpt-6.1-sol' }, controller.signal);
+    const response = await request({ ...body, model: 'cursor-composer-2.5' }, controller.signal);
     await started.promise; controller.abort(); await response.body.cancel().catch(() => {});
     await aborted.promise;
   });

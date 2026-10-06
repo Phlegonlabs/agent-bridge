@@ -178,9 +178,9 @@ The batch workflow accepts explicit independent `{id, worker, task}` jobs or use
 
 ## Troubleshooting
 
-For long Claude tasks, reconnect with the same session headers, model, effort and request content.
+For session-identified Codex and long Claude tasks, reconnect with the same session headers, model, effort and request content.
 The bridge attaches identical retries to the existing task, even when switching between streaming and buffered responses.
-Completed retries return the audited result without running Claude again.
+Completed retries return the audited result without another worker.
 A different active turn returns `SESSION_BUSY`.
 Closing the connection detaches it; the worker continues until completion, its deadline, or authenticated provider shutdown.
 Reconnects do not reset deadlines.
@@ -195,7 +195,9 @@ Status separates queueing, worker start, last observed native activity, cleanup 
 Heartbeat and polling do not advance activity. Silence does not trigger a rerun.
 The monitor ends after ten minutes by default; Ctrl+C stops only monitoring.
 Owned Claude streams show lifecycle, elapsed time and recent activity in ZCode's Thought area.
-Other native routes may show only the final answer. Status lookup remains independent.
+Codex streams show the same labelled status and native answer deltas. Reconnects replay the retained answer prefix.
+Tool calls and structured responses remain buffered until verification. Failed partial streams cannot trigger correction or fallback.
+Codex replay expires with the in-memory cache or provider restart. Status lookup remains independent.
 For a CLI workflow batch, use `status --workflow-id UUID --watch`; its UUID appears in progress output.
 The saved `model-bridge` workflow reports job states while waiting for results.
 Standalone CLI workers print sanitized progress to stderr and keep final JSON on stdout.
@@ -210,6 +212,7 @@ HTTP reconnection cannot guarantee exactly-once rendering in the host UI.
 | `AUTH_REQUIRED` | Run login for that exact provider, then doctor. |
 | `ZCODE_CONFIG_REQUIRED` | Open ZCode and finish first launch before setup registration. |
 | `CODEX_MODEL_CATALOG_UNAVAILABLE` | Open the official Codex CLI after login to populate its local cache. |
+| `CODEX_CONTENT_REJECTED` | The upstream provider rejected the request content. The bridge does not replay or bypass that rejection. |
 | `MODEL_UNAVAILABLE` / reasoning error | Re-list models, choose an exact ID and a declared reasoning strength. |
 | `PORT_IN_USE` | Inspect the listener; reuse or deliberately stop the correct provider before restarting. |
 | `AGENT_NOT_FOUND` / `PROFILE_NOT_READ_ONLY` | Install/review generic plan-mode profiles, or use an existing compatible profile explicitly. |

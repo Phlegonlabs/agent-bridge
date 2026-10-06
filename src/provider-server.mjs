@@ -104,7 +104,7 @@ export function createProviderServer({ config, token, relay, pool = new Provider
   const modelIds = Object.keys(config.routes);
   const send = (res, status, value) => { if (!res.destroyed) { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); } };
   const server = http.createServer(async (req, res) => {
-    let timer, heartbeat, controller, attachment, progress;
+    let timer, heartbeat, controller, attachment, progress, writeProgress = () => {};
     try {
       if (req.headers.origin || !/^(127\.0\.0\.1|localhost):\d+$/.test(req.headers.host ?? '')) { send(res, 403, { error: { message: 'Loopback clients only.', type: 'access_denied' } }); return; }
       if (req.method === 'GET' && req.url === '/health') { send(res, 200, { service: 'agent-bridge', version: 1, ready: !pool.stopped, configSha256: hash(JSON.stringify(config)) }); return; }
@@ -153,8 +153,8 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       const callerWorkspace = delegationCwd(body);
       const workspaceKey = callerWorkspace && callerWorkspace.length <= 4096 && path.isAbsolute(callerWorkspace)
         ? workspaceTaskKey(callerWorkspace) : undefined;
-      const owned = route.provider === 'claude' && route.mode === 'delegate' && transport.sessionId !== undefined &&
-        (route.sessionContinuity || route.execution?.mode === 'workspace-write');
+      const owned = transport.sessionId !== undefined && (route.provider === 'codex' ||
+        route.provider === 'claude' && route.mode === 'delegate' && (route.sessionContinuity || route.execution?.mode === 'workspace-write'));
       if (route.provider === 'claude') {
         clearTimeout(timer);
         timer = setTimeout(() => controller.abort(new BridgeError('REQUEST_TIMEOUT', 'The request deadline ended.')), claudeDelegateBudget(config).requestTimeoutMs);
@@ -163,8 +163,10 @@ export function createProviderServer({ config, token, relay, pool = new Provider
         const sessionKey = delegateSessionKey(transport.sessionId, transport.sessionType);
         attachment = delegates.attach({ sessionKey, fingerprint: delegationFingerprint(body, selection),
           metadata: { provider: route.provider, model: body.model }, workspaceKey,
-          timeoutMs: claudeDelegateBudget(config).requestTimeoutMs, start: async (signal, taskProgress) => {
-            const { message, evidence } = await relay.complete(body, { signal, transport, progress: taskProgress });
+          timeoutMs: route.provider === 'claude' ? claudeDelegateBudget(config).requestTimeoutMs : config.requestTimeoutMs,
+          start: async (signal, taskProgress, emit) => {
+            const { message, evidence } = await relay.complete(body, { signal, transport, progress: taskProgress,
+              ...(route.provider === 'codex' ? { onContentDelta: emit } : {}) });
             if (Buffer.byteLength(JSON.stringify(completion(message, body.model))) > MAX_RESPONSE_BYTES) {
               throw new BridgeError('RESPONSE_TOO_LARGE', 'Model response exceeds the local limit.');
             }
@@ -185,19 +187,30 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       const sse = delta => `data: ${JSON.stringify({ id: streamId, object: 'chat.completion.chunk', created: streamCreated, model: body.model,
         choices: [{ index: 0, ...delta }] })}\n\n`;
       let streamedText = '';
-      const progressStream = owned && body.stream ? new ProgressStream() : null;
-      const writeProgress = () => {
+      const progressStream = body.stream ? new ProgressStream() : null;
+      writeProgress = () => {
         if (!progressStream || res.destroyed || res.writableNeedDrain) return;
-        const text = progressStream.next(statuses.get(attachment.taskId));
+        const text = progressStream.next(statuses.get(attachment?.taskId ?? progress.record.taskId));
         if (text) res.write(sse({ delta: { reasoning_content: text }, finish_reason: null }));
       };
-      const onContentDelta = !owned && body.stream && !body.response_format
-        ? text => { streamedText += text; if (!res.destroyed && !controller.signal.aborted) res.write(sse({ delta: { content: text }, finish_reason: null })); }
+      const onContentDelta = body.stream && !body.response_format
+        ? text => {
+          if (Buffer.byteLength(streamedText) + Buffer.byteLength(text) > MAX_RESPONSE_BYTES) {
+            throw new BridgeError('RESPONSE_TOO_LARGE', 'Streamed model response exceeds the local limit.');
+          }
+          streamedText += text;
+          if (!res.destroyed && !controller.signal.aborted) {
+            const frame = sse({ delta: { content: text }, finish_reason: null });
+            if (res.writableLength + Buffer.byteLength(frame) > MAX_RESPONSE_BYTES + 64 * 1024) { res.destroy(); return; }
+            res.write(frame);
+          }
+        }
         : undefined;
       if (body.stream) {
         res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' }); res.flushHeaders();
         res.write(sse({ delta: { role: 'assistant', content: '' }, finish_reason: null }));
         writeProgress();
+        if (route.provider === 'codex' && onContentDelta) attachment?.subscribe(onContentDelta);
         // Some clients drop streams whose idle timers only reset on data
         // events (SSE comments do not count). An empty content delta is a
         // protocol-legal no-op for rendering but reads as activity.
@@ -219,7 +232,12 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       const result = completion(message, body.model, streamId);
       if (Buffer.byteLength(JSON.stringify(result)) > MAX_RESPONSE_BYTES) throw new BridgeError('RESPONSE_TOO_LARGE', 'Model response exceeds the local limit.');
       if (controller.signal.aborted) throw new BridgeError('REQUEST_TIMEOUT', 'The request deadline or client connection ended.');
+      if (route.provider === 'codex' && streamedText && (message.tool_calls?.length ||
+          typeof message.content !== 'string' || !message.content.startsWith(streamedText))) {
+        throw new BridgeError('RELAY_STREAM_MISMATCH', 'The audited answer differs from its streamed text.');
+      }
       progress?.settle({ ok: true, code: 'VERIFIED', actualModel: answer.evidence?.actualModel });
+      writeProgress();
       if (body.stream) {
         if (message.tool_calls?.length) res.write(sse({ delta: { tool_calls: message.tool_calls.map((call, index) => ({ index, ...call })) }, finish_reason: null }));
         else if (typeof message.content === 'string' && message.content !== streamedText) {
@@ -238,6 +256,7 @@ export function createProviderServer({ config, token, relay, pool = new Provider
       const code = error instanceof BridgeError ? error.code : 'PROVIDER_ERROR';
       progress?.settle({ ok: false, code: controller?.signal.aborted ? controller.signal.reason?.code ?? 'CANCELLED' : code,
         recoveryRequired: error.nativeExecutionStarted === true });
+      writeProgress();
       const value = { error: { message: error instanceof BridgeError ? error.message : 'Local provider request failed.', type: 'api_error', code } };
       if (res.headersSent) { if (!res.destroyed) { res.write(`data: ${JSON.stringify(value)}\n\n`); res.end(); } }
       else { if (statusFor(code) === 429) res.setHeader('Retry-After', '15'); send(res, statusFor(code), value); }

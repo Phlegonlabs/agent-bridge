@@ -37,6 +37,17 @@ Installed Harness is `0.62.1`; loaded identity is unobserved. Shared AGENTS rule
 
 ## Verification and remaining work
 
+2026-10-05 — working-tree after `a37fb2b`: connect Codex content and status to HTTP, with bounded owned-prefix replay.
+Session-identified Codex turns retain one worker, task ID and deadline across identical reconnects.
+Changed active turns remain busy. Anonymous Codex and Cursor requests retain disconnect cancellation.
+After partial content, correction and fallback are prohibited. Final mismatches fail without a successful stream terminator.
+Tool envelopes and structured content remain buffered and validated. Private reasoning and native errors do not enter status.
+The initial HTTP regression used the wrong Cursor route ID in an updated legacy fixture and reached its 90-second supervisor deadline.
+Its recorded process tree terminated with no survivors. The route ID is corrected; the repaired focused check passed with exit 0.
+Evidence: `.bridge/sol-http-933172c7-dd14-4a67-80fe-7e5b31fe5a96/`.
+Repaired evidence: `.bridge/sol-http-repair-8b042422-5c98-4a08-aa63-4f8a70c08aa6/stdout.log`.
+The README language pair and native-provider guide now describe the retained contract and cache limits.
+
 2026-10-05 — working-tree after `e7a1b9e`: bound and structurally parse streamed relay envelopes.
 Only direct content following the matching direct nonce can stream. Nested tool arguments and quoted JSON remain private.
 Split Unicode escapes retain surrogate pairs. Invalid escapes and oversized input fail explicitly.

@@ -118,14 +118,17 @@ export class ModelRelay {
     if (this.config.routes[body.model]?.mode === 'delegate') return this.delegate(body, decision, options, id, onContentDelta);
     const nonce = randomUUID();
     const attempts = [], routeIds = [decision.route, ...(this.config.fallback.enabled ? this.config.fallback.routes[decision.route] ?? [] : [])];
-    let result, message, selected;
+    let result, message, selected, emittedText = '';
     for (const routeId of routeIds) {
       if (signal.aborted) throw new BridgeError('CANCELLED', 'Request cancelled.');
       // Streaming skips response_format requests: their content still needs the
       // final validation pass, and a corrective round cannot retract sent text.
-      const streamed = Boolean(onContentDelta) && !body.response_format && this.config.routes[routeId]?.provider === 'claude';
+      const streamed = Boolean(onContentDelta) && !body.response_format &&
+        ['claude', 'codex'].includes(this.config.routes[routeId]?.provider);
       const routeOptions = routeId === decision.route ? options : { ...options, requestedEffort: this.config.fallback.reasoningEffort ?? options.requestedEffort };
-      const attemptOptions = streamed ? { ...routeOptions, onPartial: createEnvelopeContentStream(nonce, onContentDelta).feed } : routeOptions;
+      const attemptOptions = streamed ? { ...routeOptions, onPartial: createEnvelopeContentStream(nonce, text => {
+        emittedText += text; onContentDelta(text);
+      }).feed } : routeOptions;
       try {
         result = await this.call(routeId, relayPrompt(body, nonce), attemptOptions);
         try { message = parseRelay(result.finalResponse ?? result.response, body, nonce); }
@@ -134,16 +137,20 @@ export class ModelRelay {
           // transport. Narration-wrapped replies never get here (the parser
           // extracts them); this path is for prose answers, empty envelopes and
           // undeclared tool calls.
-          if (error.code !== 'RELAY_PROTOCOL_ERROR') throw error;
+          if (error.code !== 'RELAY_PROTOCOL_ERROR' || emittedText) throw error;
           result = await this.call(routeId, correctiveRelayPrompt(body, nonce, error.message), attemptOptions);
           message = parseRelay(result.finalResponse ?? result.response, body, nonce);
+        }
+        if (emittedText && (message.tool_calls?.length || typeof message.content !== 'string' ||
+            !message.content.startsWith(emittedText))) {
+          throw new BridgeError('RELAY_STREAM_MISMATCH', 'The audited answer differs from its streamed text.');
         }
         selected = routeId;
         attempts.push({ route: routeId, ok: true, runId: result.runId }); break;
       } catch (error) {
         attempts.push({ route: routeId, ok: false, code: error.code });
         await writeFile(path.join(directory, `attempt-${attempts.length}.json`), JSON.stringify(attempts.at(-1)), { flag: 'wx', mode: 0o600 });
-        if (!this.config.fallback.enabled || !this.config.fallback.on.includes(error.code) || routeId === routeIds.at(-1)) throw error;
+        if (emittedText || !this.config.fallback.enabled || !this.config.fallback.on.includes(error.code) || routeId === routeIds.at(-1)) throw error;
       }
     }
     const evidence = { id, requestedModel: body.model, selected, requestedEffort: body.reasoning_effort,

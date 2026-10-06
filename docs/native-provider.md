@@ -22,6 +22,18 @@ Session-identified Claude turns with continuity retain execution when HTTP disco
 
 Codex and Cursor remain model relays: they return text or validated function calls for ZCode to execute. They do not perform workspace edits themselves. Codex receives the complete prompt through standard input and verifies the model and selected effort from its rollout under `CODEX_HOME`. Cursor verifies the exact catalog dispatch and the runtime model name. Requests accept text and function schemas; images are unsupported.
 
+Codex uses one task-owned `app-server --stdio` process. Native assistant deltas supply streamed envelope content before final verification.
+Tool calls and structured responses remain buffered until validation. Status uses the labelled Thought channel.
+Streamed text remains provisional until the audited terminal event. A failed stream sends an error without a successful `[DONE]`.
+After answer text appears, the bridge cannot launch correction or fallback for that response.
+Session-identified Codex requests survive HTTP disconnects and retain their original deadline.
+Identical retries join the existing task and replay its retained text prefix, then receive subsequent deltas.
+Completed retries return the audited result without another worker. Retention ends after 15 minutes or provider restart.
+Without session headers, Codex disconnects still cancel their worker. Cursor retains its connection-bound behavior.
+Each owned prefix is limited to 512 KiB and counts toward retained-result memory. Slow connections are detached when their buffer limit is exceeded.
+Invocation settings disable configured MCP servers, apps, plugins, shell, browser and subagent tools without changing personal configuration.
+Native model, effort, cwd and read-only policy are checked before generation. Rollout evidence independently verifies model and effort after exit.
+
 An upstream Codex content rejection returns `CODEX_CONTENT_REJECTED`, rather than a generic connection failure.
 The bridge does not correct, replay or route that rejected request to another model.
 Before streaming headers, this error returns HTTP 400. An open stream receives the same code as an error event.
@@ -61,7 +73,7 @@ node bin/bridge.mjs status --session-id ID --session-type subagent --watch
 
 The CLI reads the existing token privately. Default monitoring ends after ten minutes; Ctrl+C stops only the monitor.
 Use `--config FILE` when the provider uses a custom configuration.
-Owned Claude streams expose bridge status in ZCode's Thought area. Other native actor routes may show only the final answer. Use this independent status monitor when inline status is unavailable.
+Codex and owned Claude streams expose bridge status in ZCode's Thought area. Use this independent status monitor when inline status is unavailable.
 Status never becomes assistant answer text.
 Project lookup matches the working directory declared in the caller's context.
 Missing context cannot be matched. The lookup key and project path are not returned in status.
