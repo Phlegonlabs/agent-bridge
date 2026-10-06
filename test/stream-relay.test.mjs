@@ -48,3 +48,24 @@ test('a second envelope after a failed first attempt still streams', () => {
   const result = collect([bad, ' ', good]);
   assert.equal(result.text, 'firstsecond');
 });
+
+test('matches spaced direct fields without streaming nested tool arguments or quoted JSON', () => {
+  assert.equal(collect([`{"nonce" : "${nonce}", "content" : "visible", "tool_calls":[]}`]).text, 'visible');
+  assert.equal(collect([`{"wrapper":{"nonce":"${nonce}","content":"private"}}`]).text, '');
+  assert.equal(collect([`{"nonce":"${nonce}","tool_calls":[{"arguments":{"content":"private"}}],"content":null}`]).text, '');
+  assert.equal(collect([JSON.stringify(`{"nonce":"${nonce}","content":"quoted"}`)]).text, '');
+});
+
+test('streams direct content across every character boundary and retains surrogate pairs', () => {
+  const envelope = `{"nonce":"${nonce}","content":"\\ud83d\\ude80 漢字\\nline","tool_calls":[]}`;
+  assert.equal(collect([...envelope]).text, '🚀 漢字\nline');
+  const out = [], stream = createEnvelopeContentStream(nonce, text => out.push(text));
+  stream.feed(`{"nonce":"${nonce}","content":"\\ud83d`); assert.deepEqual(out, []);
+  stream.feed('\\ude80"}'); assert.deepEqual(out, ['🚀']);
+});
+
+test('bounds input and rejects invalid JSON escapes', () => {
+  const stream = createEnvelopeContentStream(nonce, () => {}, { maxBytes: 64 });
+  assert.throws(() => stream.feed('x'.repeat(65)), { code: 'RESPONSE_TOO_LARGE' });
+  assert.throws(() => collect([`{"nonce":"${nonce}","content":"\\u00zz"}`]), { code: 'RELAY_PROTOCOL_ERROR' });
+});

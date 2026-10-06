@@ -37,6 +37,11 @@ Installed Harness is `0.62.1`; loaded identity is unobserved. Shared AGENTS rule
 
 ## Verification and remaining work
 
+2026-10-05 — working-tree after `e7a1b9e`: bound and structurally parse streamed relay envelopes.
+Only direct content following the matching direct nonce can stream. Nested tool arguments and quoted JSON remain private.
+Split Unicode escapes retain surrogate pairs. Invalid escapes and oversized input fail explicitly.
+All nine extractor tests passed with `node --test --test-timeout=10000 test/stream-relay.test.mjs`, exit 0.
+
 2026-10-05 — working-tree after `a16d1c9`: replace the Codex exec transport with task-owned app-server stdio.
 Native notifications validate thread, turn and item identity. Dispatch model, effort, cwd and policy are checked before generation.
 Completed native text must match its deltas. Persisted rollout evidence still verifies model and effort after process exit.
