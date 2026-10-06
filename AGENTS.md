@@ -165,7 +165,7 @@ When pricing, paid access, purchase-gated features or outside sellers apply, rea
 
 ## Deployment
 
-No deployment configuration is established by this context refresh. Read the current project configuration and applicable deployment contract before any deployment. Verify separate preview and production resources and exact deployed identity. This record grants no external action.
+The provider deploys manually from `main` to the existing Windows loopback service on port 32147. See `docs/DEPLOYMENT.md` for source identity, private state and verification. GitHub Actions tests source on three platforms; it does not deploy. Candidate tests use isolated synthetic state. Check active work and process identity before an authorized restart. This record grants no external action.
 
 ## Post-Delivery Activation
 

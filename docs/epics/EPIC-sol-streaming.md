@@ -205,4 +205,27 @@ The termination command's failure evidence remains attached. No ownership check 
 Scope: `src/process.mjs`, process ownership regression and this record; trace: SOL-003.
 All 239 local tests passed, exit 0. Synthetic regressions distinguish stopped, surviving and unverifiable process identities.
 Evidence: `.bridge/release-regression-032f0331-1b0b-4ae2-81ec-6f2f0d1b3479/`. CI and source review remain pending.
+
+2026-10-06 — release result at `7d7710a42a12a8e0249a851db7d39445f989dd05`.
+Independent source review accepted the buffered-response and Windows cleanup repairs, with no actionable source findings.
+The reviewer binding was native GPT-6.1 Sol / xhigh; actual backend model identity was not exposed. No fallback was used.
+CI `37437571697` passed on Windows, Linux and macOS. Earlier failed runs remain historical evidence.
+All 46 pending commits fast-forwarded `main` from `acb9b31304e5933134079f923a08544b24edb3f4` to this exact candidate.
+Remote work-branch and main readback matched the candidate. Main CI `37437955854` passed on all three platforms.
+
+The idle-only deployment initially stopped before shutdown because it detected a child process.
+Inspection identified the existing Windows console host, not a worker. Its identity was captured for shutdown verification.
+Authenticated shutdown then closed old PID 32128, its console child 28836 and port 32147 before replacement.
+New runtime PID 8820 started at `2026-10-06T08:43:45.9946970Z` from the clean candidate checkout.
+Health, configuration identity, all 17 routes, authentication and native Sol completion passed.
+The benign request returned 177 content bytes, one content delta and three status frames in 13,176 ms.
+The smoke checker initially omitted the provider namespace. Its failed exit remains recorded; corrected receipt validation passed.
+No production task was cancelled, replayed or migrated. No account or configuration changed.
+Deployment evidence and remaining desktop/long-task gaps are indexed in `docs/DEPLOYMENT.md`.
+
+This receipt commit changes only operational documents. Source parity with the deployed candidate must remain exact.
+Shared AGENTS rules remain current by meaning against the unchanged Harness 0.62.1 template.
+Its local deployment paragraph now names the observed manual target. Loaded Harness identity remains unobserved.
+No PRD, architecture, design package or managed PLAN/RUN exists; no product contract was rewritten.
+The persistent provider remains active until owner shutdown. Temporary verification processes exited; private artifacts remain ignored.
 Desktop rendering and multiple live content chunks remain unverified. Shared Harness 0.62.1 rules remain current by meaning.
