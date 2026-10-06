@@ -201,3 +201,17 @@ Checks cover visible pending status, reconnect identity, unchanged final content
 The synthetic native-host probe initially lacked a selected model, then omitted Agent's required description.
 These fixture errors launched no external worker. The corrected isolated probe remains pending.
 Existing `.bridge/` ignore rules cover fixture state and logs. No new artifact class needs an ignore rule.
+
+2026-10-05 — `59a27e4`: independent source review accepted native inline status with no actionable findings.
+The reviewer ran no tests or services. Its actual runtime model identity was not exposed.
+The installed ZCode 3.14.4.7912 isolated CLI probe dispatched one native Agent to a local synthetic provider.
+After setting the profile's required effort, its child session received three labelled reasoning-delta events before completion.
+The original receipt used an incorrect event-type predicate. The corrected validation retains that receipt and the original events.
+Evidence: `.bridge/native-inline-host-5f8c8bc6-af2d-47a2-86a4-3f0b497a1598/validated-events.json`.
+No external model call, production session or account migration was used for this probe.
+README translations and compatibility evidence now describe the inline channel and its remaining visual acceptance gap.
+Live observation found listener PID 18544, started at `2026-10-06T01:05:59Z`, with one active Claude delegate.
+This is an observed external runtime change from the earlier PID 35188 record; its restart intent is unknown.
+The process command is `node bin/provider.mjs`. Health is ready; no task has been interrupted.
+Runtime activation and actual desktop capture remain pending. No temporary test server or CLI process remains active.
+Harness 0.62.1 shared rules remain current by meaning. Loaded skill identity remains unobserved.

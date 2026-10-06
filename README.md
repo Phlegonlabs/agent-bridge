@@ -102,7 +102,7 @@ Choose `off` or a selected Codex model ID. The target must exist in the generate
 node bin/bridge.mjs setup --providers codex,claude --models codex:gpt-6.1-sol,claude:claude-opus-5-5 --fallback gpt-6.1-sol --fallback-effort xhigh
 ```
 
-Fallback handles Claude timeout and rate/usage limits after worker cleanup. Codex continues through ZCode's host tools and inspects partial work. It preserves the assignment's file and command restrictions. It does not replay the failed Claude turn. Permission denial, cancellation, model mismatch, protocol failure and unconfirmed cleanup do not trigger fallback. Session-identified Claude turns send heartbeats followed by audited final text. Other provider routes keep their selected model.
+Fallback handles Claude timeout and rate/usage limits after worker cleanup. Codex continues through ZCode's host tools and inspects partial work. It preserves the assignment's file and command restrictions. It does not replay the failed Claude turn. Permission denial, cancellation, model mismatch, protocol failure and unconfirmed cleanup do not trigger fallback. Owned Claude streams show labelled bridge status in ZCode's Thought area before audited final text. These messages contain observations, not native reasoning. Other provider routes keep their selected model.
 
 ## 4. Start the provider and connect ZCode
 
@@ -194,7 +194,8 @@ Task IDs arrive in the `X-Agent-Bridge-Task-Id` response header.
 Status separates queueing, worker start, last observed native activity, cleanup and audited completion.
 Heartbeat and polling do not advance activity. Silence does not trigger a rerun.
 The monitor ends after ten minutes by default; Ctrl+C stops only monitoring.
-Native ZCode views may still show only the final answer; status lookup remains independent.
+Owned Claude streams show lifecycle, elapsed time and recent activity in ZCode's Thought area.
+Other native routes may show only the final answer. Status lookup remains independent.
 For a CLI workflow batch, use `status --workflow-id UUID --watch`; its UUID appears in progress output.
 The saved `model-bridge` workflow reports job states while waiting for results.
 Standalone CLI workers print sanitized progress to stderr and keep final JSON on stdout.

@@ -1,5 +1,17 @@
 # Compatibility evidence
 
+## Native Agent inline status — 2026-10-05
+
+Source candidate: `59a27e403b085e27236ef1179a51615bc5c56d21`.
+Owned Claude streams send labelled status through `reasoning_content`; final answer text remains separate.
+All 214 offline tests passed on Windows Node 24.19.0. Independent source review accepted this exact candidate.
+An isolated ZCode 3.14.4.7912 desktop-surface CLI run dispatched one native Agent against a local synthetic provider.
+Its child session received three `model.streaming` reasoning-delta events before completion.
+These events contained admission, running activity and terminal status. The child returned its expected marker.
+This verifies installed native event delivery. It does not verify desktop pixels or authenticated Claude execution.
+Private evidence: `.bridge/native-inline-host-5f8c8bc6-af2d-47a2-86a4-3f0b497a1598/validated-events.json`.
+Runtime activation waits for the existing provider's active task. Desktop capture and cross-platform CI remain pending.
+
 ## Delegate observability — 2026-10-05
 
 Source candidate: `288fa52ac9731ce21d1a42b96eeb5be3bb6cadb6`.
