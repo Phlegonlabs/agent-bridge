@@ -40,7 +40,7 @@ Installed Harness is `0.62.1`; loaded identity is unobserved. Shared AGENTS rule
 2026-10-05 — independent reviewer found a valid mixed content/tool envelope failed only in streaming mode at `ca889a4`.
 The repair retains streamed content and sends accompanying tool calls only after native and protocol validation.
 HTTP finalization sends any remaining content and validated calls independently. Invalid tool envelopes still fail without another attempt.
-The regression covers mixed envelopes before and after terminal validation. All 43 focused HTTP, provider and fallback tests passed, exit 0.
+The regression covers mixed envelopes before and after terminal validation. All 42 focused HTTP, provider and fallback tests passed, exit 0.
 Evidence: `.bridge/sol-mixed-caff2b4c-e7f1-4a3f-a3d6-d8f3524e26a8/stdout.log`.
 
 2026-10-05 — working-tree after `a37fb2b`: connect Codex content and status to HTTP, with bounded owned-prefix replay.
@@ -90,3 +90,8 @@ Test classification, streamed delta identity, forbidden tools, model/effort mism
 Use isolated synthetic protocol fixtures first. Keep authenticated native evidence separate from desktop rendering.
 Run independent source review and the offline suite on the final candidate.
 No push or active-task cancellation is authorized by this request.
+
+2026-10-05 — working-tree after `982d6b3`: certify queue and cooldown failures that occur before native invocation.
+Owned requests can retry after capacity recovers. A prior executed attempt retains uncertainty across fallback or corrective admission failures.
+All 54 focused tests passed, exit 0. They cover recovery and retention after native execution.
+Evidence: `.bridge/sol-admission-0ab2909d-1d6f-4e45-8989-2aaa70c38cf5/stdout.log`.

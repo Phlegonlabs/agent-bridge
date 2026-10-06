@@ -20,10 +20,15 @@ async function fixture(work, mode = 'valid') {
     settings.onProgress?.({ type: 'running' }); settings.onProgress?.({ type: 'activity', kind: 'native_retry' });
     const nonce = /Required nonce: ([a-f0-9-]+)/.exec(prompt)[1];
     const prefix = `{"nonce": "${nonce}", "content": "first `;
-    if (mode !== 'rejected' && mode !== 'tool' && mode !== 'structured') settings.onPartial?.(prefix);
+    if (!['rejected', 'tool', 'structured', 'rate-limit', 'correction-admission'].includes(mode)) settings.onPartial?.(prefix);
     began.resolve(); await pending.promise;
-    if (mode === 'rejected' || mode === 'timeout') return { ok: false, code: mode === 'rejected' ? 'CODEX_CONTENT_REJECTED' : 'TIMEOUT',
+    if (['rejected', 'timeout', 'rate-limit'].includes(mode)) return { ok: false,
+      code: mode === 'rejected' ? 'CODEX_CONTENT_REJECTED' : mode === 'rate-limit' ? 'RATE_LIMITED' : 'TIMEOUT',
       runId: 'synthetic', execution: { exitCode: 1 } };
+    if (mode === 'correction-admission') {
+      pool.groups.codex.cooldownUntil = Date.now() + 5000;
+      return { ok: true, response: 'malformed envelope', runId: 'synthetic', execution: { exitCode: 0 } };
+    }
     let response;
     if (mode === 'tool') response = JSON.stringify({ nonce, content: null, tool_calls: [{ name: 'read_probe', arguments: { path: 'fixture' } }] });
     else if (mode === 'structured') { assert.equal(settings.onPartial, undefined); response = JSON.stringify({ nonce, content: '{}', tool_calls: [] }); }
@@ -41,7 +46,7 @@ async function fixture(work, mode = 'valid') {
   const headers = { Authorization: 'Bearer synthetic-sol-key', 'x-session-id': 'synthetic-sol-session', 'x-zcode-session-type': 'subagent' };
   const request = (value = body, abort = AbortSignal.timeout(4000), session = true) => fetch(base + '/v1/chat/completions', {
     method: 'POST', headers: session ? headers : { Authorization: headers.Authorization }, body: JSON.stringify(value), signal: abort });
-  try { await work({ request, body, pending, began, calls: () => calls, signal: () => signal,
+  try { await work({ request, body, pending, began, pool, config, calls: () => calls, signal: () => signal,
     lookup: async id => (await (await fetch(base + '/v1/tasks/' + id, { headers, signal: AbortSignal.timeout(1000) })).json()).tasks[0] }); }
   finally { pending.resolve(); await server.shutdown(); }
 }
@@ -148,4 +153,49 @@ test('owned stream observers detach, replay once and enforce the response cap', 
     assert.throws(() => emit('x'.repeat(512 * 1024)), { code: 'RESPONSE_TOO_LARGE' });
     pending.resolve(); await second.outcome;
   } finally { pending.resolve(); await registry.shutdown(); }
+});
+
+test('an identical owned Sol request reaches recovered capacity after certified cooldown or queue rejection', async () => {
+  for (const admission of ['cooldown', 'queue']) await fixture(async ({ request, body, pending, pool, config, calls }) => {
+    config.fallback.enabled = false;
+    const releases = admission === 'queue' ? await Promise.all(Array.from({ length: config.limits.codex }, () => pool.acquire('codex'))) : [];
+    if (admission === 'queue') pool.maxQueue = 0;
+    else pool.groups.codex.cooldownUntil = Date.now() + 5000;
+    try {
+      const first = await request({ ...body, stream: false });
+      assert.equal(first.status, 429); assert.equal((await first.json()).error.code, admission === 'queue' ? 'QUEUE_FULL' : 'RATE_LIMITED');
+      assert.equal(calls(), 0);
+      for (const release of releases) release(); pool.groups.codex.cooldownUntil = 0; pool.maxQueue = 100;
+      pending.resolve();
+      const second = await request({ ...body, stream: false });
+      assert.equal(second.status, 200); assert.equal((await second.json()).choices[0].message.content, 'first second');
+      assert.equal(calls(), 1);
+    } finally { for (const release of releases) release(); }
+  });
+});
+
+test('a later fallback admission rejection retains uncertainty from an earlier native attempt', async () => {
+  await fixture(async ({ request, body, pending, pool, calls }) => {
+    pool.groups.codex.cooldownUntil = 0;
+    pending.resolve();
+    // The first failed native attempt imposes its real cooldown. Its fallback
+    // then fails before invocation, but the combined request remains uncertain.
+    const first = await request({ ...body, stream: false });
+    assert.notEqual(first.status, 200);
+    const count = calls();
+    pool.groups.codex.cooldownUntil = 0;
+    const second = await request({ ...body, stream: false });
+    assert.notEqual(second.status, 200); assert.equal(calls(), count);
+  }, 'rate-limit');
+});
+
+test('a corrective admission rejection retains a successful malformed native attempt', async () => {
+  await fixture(async ({ request, body, pending, pool, config, calls }) => {
+    config.fallback.enabled = false; pending.resolve();
+    const first = await request({ ...body, stream: false });
+    assert.equal(first.status, 429); assert.equal(calls(), 1);
+    pool.groups.codex.cooldownUntil = 0;
+    const second = await request({ ...body, stream: false });
+    assert.equal(second.status, 429); assert.equal(calls(), 1);
+  }, 'correction-admission');
 });

@@ -79,8 +79,12 @@ export class ModelRelay {
     const selection = resolveModelSelection(route, options.requestedEffort);
     const onProgress = options.progress?.beginAttempt({ provider: route.provider, model: selection.model ?? route.expectedModel ?? routeId });
     notifyProgress(onProgress, { type: 'queued' });
-    if (this.pool.groups[poolName].cooldownUntil > Date.now() + (options.skipCooldown ? 0 : options.timeoutMs)) throw new BridgeError('RATE_LIMITED', 'This capacity pool is cooling down until its reported reset.');
-    const release = await this.pool.acquire(poolName, options.signal);
+    if (this.pool.groups[poolName].cooldownUntil > Date.now() + (options.skipCooldown ? 0 : options.timeoutMs)) {
+      throw Object.assign(new BridgeError('RATE_LIMITED', 'This capacity pool is cooling down until its reported reset.'), { nativeExecutionStarted: false });
+    }
+    const release = await this.pool.acquire(poolName, options.signal).catch(error => {
+      throw Object.assign(error, { nativeExecutionStarted: false });
+    });
     notifyProgress(onProgress, { type: 'starting' });
     try {
       const result = await this.invoke({ ...route, model: selection.model }, prompt, { ...options, effort: selection.effort, onProgress });
@@ -118,7 +122,7 @@ export class ModelRelay {
     if (this.config.routes[body.model]?.mode === 'delegate') return this.delegate(body, decision, options, id, onContentDelta);
     const nonce = randomUUID();
     const attempts = [], routeIds = [decision.route, ...(this.config.fallback.enabled ? this.config.fallback.routes[decision.route] ?? [] : [])];
-    let result, message, selected, emittedText = '';
+    let result, message, selected, emittedText = '', priorExecutionPossible = false;
     for (const routeId of routeIds) {
       if (signal.aborted) throw new BridgeError('CANCELLED', 'Request cancelled.');
       // Streaming skips response_format requests: their content still needs the
@@ -131,6 +135,7 @@ export class ModelRelay {
       }).feed } : routeOptions;
       try {
         result = await this.call(routeId, relayPrompt(body, nonce), attemptOptions);
+        priorExecutionPossible = true;
         try { message = parseRelay(result.finalResponse ?? result.response, body, nonce); }
         catch (error) {
           // One corrective round: name the exact violation and re-issue the same
@@ -139,6 +144,7 @@ export class ModelRelay {
           // undeclared tool calls.
           if (error.code !== 'RELAY_PROTOCOL_ERROR' || emittedText) throw error;
           result = await this.call(routeId, correctiveRelayPrompt(body, nonce, error.message), attemptOptions);
+          priorExecutionPossible = true;
           message = parseRelay(result.finalResponse ?? result.response, body, nonce);
         }
         if (emittedText && (typeof message.content !== 'string' ||
@@ -148,6 +154,9 @@ export class ModelRelay {
         selected = routeId;
         attempts.push({ route: routeId, ok: true, runId: result.runId }); break;
       } catch (error) {
+        // A later queue rejection cannot certify that an earlier attempt never ran.
+        if (priorExecutionPossible && error.nativeExecutionStarted === false) delete error.nativeExecutionStarted;
+        priorExecutionPossible ||= error.nativeExecutionStarted !== false;
         attempts.push({ route: routeId, ok: false, code: error.code });
         await writeFile(path.join(directory, `attempt-${attempts.length}.json`), JSON.stringify(attempts.at(-1)), { flag: 'wx', mode: 0o600 });
         if (emittedText || !this.config.fallback.enabled || !this.config.fallback.on.includes(error.code) || routeId === routeIds.at(-1)) throw error;
