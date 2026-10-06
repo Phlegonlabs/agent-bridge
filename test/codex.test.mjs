@@ -35,6 +35,15 @@ async function codexFixture({ reconnect = false } = {}) {
     JSON.stringify({ type: 'turn_context', payload: { model, effort: 'high' } }),
   ].join('\n') + '\n');
   await writeFile(path.join(workspace, 'mcp'), "console.log('[]');\n");
+  await writeFile(path.join(workspace, 'exec'), `
+let prompt='';process.stdin.setEncoding('utf8');process.stdin.on('data',text=>{prompt+=text;});
+process.stdin.on('end',()=>{
+  const emit=value=>console.log(JSON.stringify(value));
+  emit({type:'thread.started',thread_id:'fake-thread'});emit({type:'turn.started'});
+  emit({type:'item.completed',item:{type:'agent_message',text:JSON.stringify({args:process.argv.slice(2),prompt})}});
+  emit({type:'turn.completed',usage:{input_tokens:1,output_tokens:1}});
+});
+`);
   // Node stands in for the native app-server. The fixture uses the observed RPC
   // lifecycle and emits real deltas before its terminal item.
   await writeFile(path.join(workspace, 'app-server'), `
@@ -233,4 +242,22 @@ test('runCodex validates catalog effort and forwards exact RPC input with increm
 
 test('codexRuntime rejects npm launcher shims Node cannot spawn', async () => {
   await assert.rejects(codexRuntime('C:\\fake\\codex.cmd'), { code: 'CODEX_RUNTIME_INVALID' });
+});
+
+test('only explicit image execution retains the native exec transport without weakening relay isolation', async () => {
+  const { home, workspace, runtime } = await codexFixture();
+  await withCodexHome(home, async () => {
+    const image = await runCodex({ cwd: workspace, task: 'native image contract', model, effort: 'high',
+      purpose: 'image', timeoutMs: 1000, codexBin: runtime });
+    assert.equal(image.ok, true); assert.equal(image.actualEffort, 'high');
+    const native = JSON.parse(image.response);
+    assert.equal(native.prompt, 'native image contract'); assert.ok(native.args.includes('--json'));
+    assert.ok(native.args.includes('mcp_servers={}')); assert.equal(native.args.includes('--stdio'), false);
+    assert.equal(native.args.includes('features.shell_tool=false'), false);
+    const relay = await runCodex({ cwd: workspace, task: 'text relay', model, effort: 'high', timeoutMs: 1000, codexBin: runtime });
+    assert.equal(relay.ok, true); assert.ok(JSON.parse(relay.response).args.includes('features.shell_tool=false'));
+    await assert.rejects(runCodex({ cwd: workspace, task: 'image', model, purpose: 'image', onPartial: () => {} }),
+      { code: 'INVALID_CODEX_PURPOSE' });
+    await assert.rejects(runCodex({ cwd: workspace, task: 'image', model, purpose: 'other' }), { code: 'INVALID_CODEX_PURPOSE' });
+  });
 });

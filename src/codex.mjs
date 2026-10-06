@@ -5,10 +5,12 @@ import { bridgeRoot } from './account.mjs';
 import { BridgeError, hash } from './profiles.mjs';
 import { runProcess } from './process.mjs';
 import { createCodexAppServer } from './codex-app-server.mjs';
+import { createCodexAudit } from './codex-audit.mjs';
 import { codexIsolationArgs } from './codex-isolation.mjs';
 import { codexHomeDirectory, codexModelCatalog, normalizeEffortValue, selectCodexModel } from './model-options.mjs';
 import { nativeExecutable } from './runtime-paths.mjs';
 import { notifyProgress } from './task-progress.mjs';
+import { observeNativeProgress } from './native-progress.mjs';
 
 
 // Node spawns without a shell, so an npm launcher shim cannot be executed
@@ -53,7 +55,9 @@ async function verifyRollout(threadId, codexHome = codexHomeDirectory(), deadlin
   return { sessionConfirmed: false, reportedModel: undefined };
 }
 
-export async function runCodex({ cwd, task, model, effort, timeoutMs = 60000, signal, codexBin, onProgress, onPartial }) {
+export async function runCodex({ cwd, task, model, effort, timeoutMs = 60000, signal, codexBin, onProgress, onPartial, purpose = 'relay' }) {
+  if (!['relay', 'image'].includes(purpose)) throw new BridgeError('INVALID_CODEX_PURPOSE', 'Choose relay or image execution.');
+  if (purpose === 'image' && onPartial) throw new BridgeError('INVALID_CODEX_PURPOSE', 'Image execution does not stream relay text.');
   if (typeof model !== 'string' || !model || model === 'auto') throw new BridgeError('CODEX_MODEL_REQUIRED', 'Choose an explicit Codex model id, for example gpt-6.1-sol.');
   if (typeof task !== 'string' || !task.trim() || Buffer.byteLength(task) > 4 * 1024 * 1024) {
     throw new BridgeError('INVALID_TASK', 'Task must be 1..4194304 bytes.');
@@ -74,17 +78,27 @@ export async function runCodex({ cwd, task, model, effort, timeoutMs = 60000, si
   await mkdir(logs, { recursive: true, mode: 0o700 });
   await writeFile(path.join(logs, 'request.json'), JSON.stringify({ runId, provider: 'codex', model,
     requestedEffort, catalogDefaultEffort: selected.defaultEffort,
-    taskSha256: hash(task), mode: 'read-only', timeoutMs }, null, 2), { flag: 'wx', mode: 0o600 });
-  const isolation = await codexIsolationArgs(runtime, workspace, logs, deadline, signal);
-  const audit = createCodexAppServer({ model, effort: requestedEffort, cwd: workspace, task, onPartial, onProgress });
+    taskSha256: hash(task), mode: 'read-only', purpose, timeoutMs }, null, 2), { flag: 'wx', mode: 0o600 });
+  // Native image generation has its own retained exec contract and image proof.
+  // It must not inherit the text relay's tool-disabled app-server transport.
+  const isolation = purpose === 'relay' ? await codexIsolationArgs(runtime, workspace, logs, deadline, signal) : [];
+  const audit = purpose === 'relay'
+    ? createCodexAppServer({ model, effort: requestedEffort, cwd: workspace, task, onPartial, onProgress })
+    : createCodexAudit(model, requestedEffort);
   const remainingMs = deadline - Date.now();
   if (remainingMs < 100) throw new BridgeError('TIMEOUT', 'Codex preflight exhausted the run deadline.');
   const execution = await runProcess({ command: runtime.command, cwd: workspace, env: runtime.env,
-    args: [...runtime.prefix, 'app-server', '--stdio', ...isolation],
-    timeoutMs: remainingMs, signal, onStdin: audit.start,
+    ...(purpose === 'relay' ? {
+      args: [...runtime.prefix, 'app-server', '--stdio', ...isolation], onStdin: audit.start, onLine: audit.onLine,
+    } : {
+      args: [...runtime.prefix, 'exec', '--json', '--color', 'never', '-s', 'read-only', '--skip-git-repo-check',
+        '-C', workspace, '-m', model, ...(requestedEffort !== null ? ['-c', `model_reasoning_effort="${requestedEffort}"`] : []),
+        '-c', 'mcp_servers={}', '--', '-'], stdinText: task,
+      onLine: line => { audit.ingest(line); notifyProgress(() => observeNativeProgress('codex', line, onProgress)); },
+    }),
+    timeoutMs: remainingMs, signal,
     stdoutPath: path.join(logs, 'events.jsonl'), stderrPath: path.join(logs, 'stderr.log'),
-    onProgress: event => notifyProgress(onProgress, { ...event, runId }),
-    onLine: audit.onLine });
+    onProgress: event => notifyProgress(onProgress, { ...event, runId }) });
   // A missing or ambiguous rollout means the dispatch cannot be verified; the
   // audit then fails CODEX_SESSION_UNVERIFIED instead of guessing.
   const rollout = await verifyRollout(audit.threadId, codexHome, deadline)

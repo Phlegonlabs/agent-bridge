@@ -95,3 +95,10 @@ No push or active-task cancellation is authorized by this request.
 Owned requests can retry after capacity recovers. A prior executed attempt retains uncertainty across fallback or corrective admission failures.
 All 54 focused tests passed, exit 0. They cover recovery and retention after native execution.
 Evidence: `.bridge/sol-admission-0ab2909d-1d6f-4e45-8989-2aaa70c38cf5/stdout.log`.
+
+2026-10-05 — working-tree after `1c0c90a`: retain native exec for the existing image entry only.
+Three prior private image receipts confirmed verified generation through exec, whose events omit the built-in image tool.
+The image caller selects its retained contract explicitly. Text relay callers retain isolated app-server streaming and tool rejection.
+Model, effort, deadlines, process ownership, rollout verification and image-output proof remain required.
+All 26 focused Codex, RPC and image-evidence tests passed, exit 0. No new live image was generated.
+Evidence: `.bridge/sol-image-boundary-47f79df5-9247-4bd4-b5a0-a2bcb366ad5b/stdout.log`.
