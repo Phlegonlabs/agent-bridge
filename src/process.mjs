@@ -69,10 +69,13 @@ export async function terminateOwnedTree(child, startedAt) {
 
 // The pipe is always drained. Only bounded line fragments and sanitized audit facts stay in RAM.
 export async function runProcess({ command, args, cwd, env = process.env, timeoutMs = 60000,
-  maxBytes = 8 * 1024 * 1024, stdoutPath, stderrPath, onLine = () => {}, onStderrLine = () => {}, onSpawn, onProgress, stdinText, signal }) {
+  maxBytes = 8 * 1024 * 1024, stdoutPath, stderrPath, onLine = () => {}, onStderrLine = () => {}, onSpawn, onProgress, stdinText, onStdin, signal }) {
   if (!Number.isInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 7200000) throw new BridgeError('INVALID_TIMEOUT', 'Timeout must be 100..7200000 ms.');
   if (stdinText !== undefined && (typeof stdinText !== 'string' || Buffer.byteLength(stdinText) > 4 * 1024 * 1024)) {
     throw new BridgeError('INVALID_INPUT', 'Process input must be text of at most 4 MiB.');
+  }
+  if (onStdin !== undefined && (typeof onStdin !== 'function' || stdinText !== undefined)) {
+    throw new BridgeError('INVALID_INPUT', 'Choose static input or an interactive input callback.');
   }
   if (signal?.aborted) return { exitCode: null, reason: 'cancelled', cleanup: { status: 'not_started' } };
   const out = await open(stdoutPath, 'wx', 0o600);
@@ -83,7 +86,7 @@ export async function runProcess({ command, args, cwd, env = process.env, timeou
   let child;
   try {
     child = spawn(command, args, { cwd, env, shell: false, windowsHide: true,
-      detached: process.platform !== 'win32', stdio: [stdinText === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'] });
+      detached: process.platform !== 'win32', stdio: [stdinText === undefined && !onStdin ? 'ignore' : 'pipe', 'pipe', 'pipe'] });
   } catch (error) { await out.close(); await err.close(); throw error; }
   let bytes = 0, reason = null, cleanup = null, stopPromise, tail = '', errorTail = '', closed = false;
   let finishClose;
@@ -150,6 +153,20 @@ export async function runProcess({ command, args, cwd, env = process.env, timeou
     try { onSpawn?.({ pid: child.pid, startedAt, command, cwd }); }
     catch (error) { void stop(error.code ?? 'spawn_hook_failed'); }
     if (stdinText !== undefined) child.stdin.end(stdinText, 'utf8');
+    if (onStdin) {
+      let inputBytes = 0, ended = false;
+      try { onStdin({
+        write(text) {
+          if (ended || reason || closed) throw new BridgeError('STDIN_CLOSED', 'The owned process input has closed.');
+          if (typeof text !== 'string' || (inputBytes += Buffer.byteLength(text)) > 32 * 1024 * 1024 ||
+              child.stdin.writableLength + Buffer.byteLength(text) > 32 * 1024 * 1024) {
+            throw new BridgeError('INVALID_INPUT', 'Interactive process input exceeds its bounded buffer.');
+          }
+          return child.stdin.write(text, 'utf8');
+        },
+        end() { if (!ended) { ended = true; child.stdin.end(); } },
+      }); } catch (error) { void stop(error.code ?? 'stdin_hook_failed'); }
+    }
   });
   child.stdin?.on('error', error => { if (error.code !== 'EPIPE') void stop('stdin_failed'); });
   const abort = () => { void stop('cancelled'); };

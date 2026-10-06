@@ -37,6 +37,15 @@ Installed Harness is `0.62.1`; loaded identity is unobserved. Shared AGENTS rule
 
 ## Verification and remaining work
 
+2026-10-05 — working-tree after `b967f46`: add bounded interactive stdin to the existing owned-process runner.
+The same timeout, cancellation, log drainage and identity-checked cleanup apply to native RPC processes.
+Static and interactive input are mutually exclusive. No second process supervisor or persistent app-server is introduced.
+All 14 focused process and ownership tests passed, exit 0.
+Evidence: `.bridge/sol-input-e2b715a5-6af3-4604-8f18-dad44478c56a/stdout.log`.
+An installed-runtime protocol probe confirmed exact model, effort, read-only policy and clean exit after stdin EOF.
+It also observed MCP startup despite an empty map. Explicit MCP isolation needs verification before streaming integration.
+Probe evidence: `.bridge/sol-protocol-d61f2ac2-20c7-421b-be04-99e6b6f091b5/`.
+
 Test classification, streamed delta identity, forbidden tools, model/effort mismatch, deadlines, cancellation and final-answer equality.
 Use isolated synthetic protocol fixtures first. Keep authenticated native evidence separate from desktop rendering.
 Run independent source review and the offline suite on the final candidate.
