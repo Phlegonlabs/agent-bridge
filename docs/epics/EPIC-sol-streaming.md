@@ -1,6 +1,6 @@
 # Sol connection and streaming repair
 
-Status: local implementation verified and independently reviewed; shared-service activation and desktop verification pending.
+Status: implementation verified, independently reviewed and active on port 32147; desktop rendering remains unverified.
 
 The owner requested multi-agent diagnosis, connection repair and streaming on 2026-10-05.
 Repository: `agent-bridge`; branch: `codex/harness-refresh-0.61.0`.
@@ -119,10 +119,10 @@ The independent GPT-6.1 Sol/xhigh reviewer accepted exact source candidate `ebf4
 It performed read-only source review, with no tests, services or children. Test and native execution evidence belong to the parent.
 Reviewer backend identity was not exposed beyond the configured role. No fallback was used.
 
-Shared listener PID 18544 remains unchanged, with start time `2026-10-06T02:05:59.1817520Z` and command `node bin/provider.mjs`.
+Before the authorized reload, shared listener PID 18544 retained start time `2026-10-06T02:05:59.1817520Z` and command `node bin/provider.mjs`.
 Authenticated status observed zero active tasks, queued jobs and active delegates after verification.
-The loaded source identity is unknown. This task has not activated the candidate, changed accounts, replayed rejected tasks or pushed commits.
-Next action: separately authorize an idle-only authenticated shutdown and replacement on the same port, then verify the loaded source.
+At that handoff, loaded source identity was unknown and the candidate had not been activated.
+The owner then authorized the idle-only reload. Its verified result is recorded below.
 Desktop Sol rendering remains an owner-visible acceptance check after activation.
 
 The current README pair, native-provider guide, compatibility evidence, index and Epic agree with this scoped result.
@@ -132,3 +132,26 @@ Shared AGENTS rules are current by meaning; its local deployment section remains
 The read-only document checker reports first-observation and loaded-identity review gaps, not a delivery approval.
 Evidence: `.bridge/sol-handoff-d9aba7c0-851c-4a27-8ec6-fc07b04e9445/stdout.json`.
 The existing `.bridge/`, `.env` and dependency ignore rules cover this task. New source and tests remain tracked.
+
+## Authorized reload — 2026-10-05
+
+The owner approved reloading the existing provider. The checkout was clean at `22c4f2db5f07e4a9c0d4ec593ed6c244685a8c3b`.
+Its executable source is identical to reviewed and tested candidate `ebf485c`; the intervening commit contains bookkeeping only.
+Immediately before authenticated shutdown, active, queued, delegate and waiter counts were zero. Old PID 18544 had no children.
+Shutdown returned 202. Old PID 18544 exited and port 32147 closed before replacement startup.
+Replacement PID 32128 started at `2026-10-06T06:43:28.3343670Z`, using Node 24.19.0 and `bin/provider.mjs` in this checkout.
+The first record write failed because `Set-Content` does not support `-NoClobber`. Startup had already succeeded.
+The parent verified the replacement identity, repaired the record with exclusive creation and reused the running replacement.
+Health is ready, its configuration hash is unchanged and authenticated status lists the same 17 model routes.
+Receipt: `.bridge/provider/activation-sol-f38e7d6a-4a1e-4d92-9410-e4fbdc1cfe0d.json`.
+
+A fresh benign request to the reloaded service returned HTTP 200, one 173-byte content delta and three status frames.
+First content arrived at 13,625 ms; total duration was 13,825 ms. Stop and `[DONE]` frames completed successfully.
+Authenticated task lookup returned `finished` / `VERIFIED` on `codex/gpt-6.1-sol`.
+Native run `87b7b47f-bf29-4356-af3b-28011745d105` confirms app-server stdio, effort `low`, model, rollout and exit 0.
+The probe deliberately omitted session ownership so a failed verification disconnect would cancel its own worker.
+Probe supervisor exited 0. After verification, active, queued and active delegate counts returned to zero.
+No native worker remains. Child PID 28836 is the replacement's console host, created at `2026-10-06T06:43:28.3425730Z`.
+Evidence: `.bridge/sol-reloaded-proof-39320e15-0a80-4b15-8117-b7b26459390d/stdout.log` and `.bridge/runs/87b7b47f-bf29-4356-af3b-28011745d105/`.
+The persistent provider remains active until owner shutdown. No account, configuration, rejected task or remote Git state changed.
+Desktop rendering and multiple live content chunks remain unverified. Shared Harness 0.62.1 rules remain current by meaning.

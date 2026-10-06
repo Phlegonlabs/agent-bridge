@@ -11,9 +11,14 @@ It returned 229 content bytes in one native delta and four status frames before 
 First content arrived at 19,777 ms; total duration was 20,164 ms. The temporary port 63854 closed afterward.
 This verifies one native request, not sustained reliability, multiple token chunks or desktop rendering.
 Private evidence: `.bridge/sol-final-regression-a95d46b2-b093-4d2f-81fa-4672879b93d7/` and `.bridge/sol-final-native-72d1dd23-d368-4d85-869f-4bb603184510/`.
-Independent source review accepted this exact candidate after three scoped repairs. Shared-service activation and desktop verification remain pending.
-This task did not restart port 32147 or push commits.
-The [Sol Epic](epics/EPIC-sol-streaming.md) records repairs and the next activation check.
+Independent source review accepted this exact candidate after three scoped repairs. Desktop verification remains pending.
+The owner-authorized reload activated byte-identical executable source at checkout `22c4f2d` on port 32147.
+Replacement PID 32128 started at `2026-10-06T06:43:28.3343670Z`. Configuration and 17 model routes remain unchanged.
+A fresh benign request to the reloaded service passed HTTP, app-server transport, model, effort and audited completion checks.
+It returned one 173-byte content delta and three status frames in 13,825 ms. Service counts returned to idle afterward.
+Private evidence: `.bridge/sol-reloaded-proof-39320e15-0a80-4b15-8117-b7b26459390d/` and `.bridge/runs/87b7b47f-bf29-4356-af3b-28011745d105/`.
+The persistent provider remains active until owner shutdown. No commits were pushed.
+The [Sol Epic](epics/EPIC-sol-streaming.md) records repairs, the reload receipt and remaining desktop verification.
 
 ## Native Agent inline status — 2026-10-05
 
