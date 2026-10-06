@@ -210,7 +210,7 @@ The original receipt used an incorrect event-type predicate. The corrected valid
 Evidence: `.bridge/native-inline-host-5f8c8bc6-af2d-47a2-86a4-3f0b497a1598/validated-events.json`.
 No external model call, production session or account migration was used for this probe.
 README translations and compatibility evidence now describe the inline channel and its remaining visual acceptance gap.
-Live observation found listener PID 18544, started at `2026-10-06T01:05:59Z`, with one active Claude delegate.
+Live observation found listener PID 18544, started at `2026-10-06T02:05:59.1817520Z`, with one active Claude delegate.
 This is an observed external runtime change from the earlier PID 35188 record; its restart intent is unknown.
 The process command is `node bin/provider.mjs`. Health is ready; no task has been interrupted.
 Runtime activation and actual desktop capture remain pending. No temporary test server or CLI process remains active.
