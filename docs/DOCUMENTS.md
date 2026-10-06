@@ -11,7 +11,7 @@
 - `docs/verification/workflow-presets.json`: redacted assertions from native runs and offline tests.
 - `docs/native-provider.md`: native dropdown provider, connection settings and current verification limits.
 - [Claude long-task reliability](epics/EPIC-claude-long-task-reliability.md): interrupted-request repair, reconnect lifetime and verification.
-- [Delegate observability](epics/EPIC-delegate-observability.md): per-task lifecycle, native activity and workflow/subagent status checks.
+- [Delegate observability](epics/EPIC-delegate-observability.md): per-task lifecycle, native activity, inline Claude status and workflow/subagent checks.
 - [Sol connection and streaming](epics/EPIC-sol-streaming.md): upstream rejection diagnosis, native answer streaming and verification.
 - `skills/codex-imagegen/SKILL.md`: ZCode instructions for native Codex image generation; set the bridge path for your checkout before installing.
 - `docs/epics/native-provider.md`: implementation scope and native protocol evidence.

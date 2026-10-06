@@ -215,3 +215,11 @@ This is an observed external runtime change from the earlier PID 35188 record; i
 The process command is `node bin/provider.mjs`. Health is ready; no task has been interrupted.
 Runtime activation and actual desktop capture remain pending. No temporary test server or CLI process remains active.
 Harness 0.62.1 shared rules remain current by meaning. Loaded skill identity remains unobserved.
+
+2026-10-05 — handoff from `62a9539`: source remains identical to reviewed and tested `59a27e4`.
+The parent opened the baseline-to-candidate review in Codex. No source repair was required.
+The runtime still has one active Claude task. Restart would cancel it, so activation has not occurred.
+The owner was asked to choose idle activation or a later activation. No schedule or background watcher was created.
+The document index now names inline Claude status. The working tree has no unrelated changes.
+Desktop Thought rendering has no before/after capture. This remains unverified, rather than a delivery PASS.
+The next action is activation after the active task ends, followed by a new native Agent visual check.
