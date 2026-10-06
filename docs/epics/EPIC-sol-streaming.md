@@ -196,4 +196,13 @@ Diagnostic CI `37435713247` reported `cleanup_failed`, which excludes the newly 
 Retain bounded stderr from those controlled identity-only commands. These commands contain no task arguments or credentials.
 No process ownership, cancellation rule or timeout changes. All 237 local tests passed, exit 0.
 Evidence: `.bridge/release-regression-0cd959b8-ffe4-4e8b-91c9-57fd24d808f8/`. Diagnostic CI and source review remain pending.
+
+2026-10-06 — working-tree from `8b35cc7`: CI `37436551037` narrowed cleanup failure to the termination command.
+It exited 1 without stderr, before the independent survivor check could run. Creation-time validation passed.
+Windows cleanup now verifies the captured process identities even when the termination command returns nonzero.
+Only a successful check with no surviving identities certifies termination. Failed verification still remains unconfirmed.
+The termination command's failure evidence remains attached. No ownership check or runtime budget changes.
+Scope: `src/process.mjs`, process ownership regression and this record; trace: SOL-003.
+All 239 local tests passed, exit 0. Synthetic regressions distinguish stopped, surviving and unverifiable process identities.
+Evidence: `.bridge/release-regression-032f0331-1b0b-4ae2-81ec-6f2f0d1b3479/`. CI and source review remain pending.
 Desktop rendering and multiple live content chunks remain unverified. Shared Harness 0.62.1 rules remain current by meaning.

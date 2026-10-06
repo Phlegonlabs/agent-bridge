@@ -24,12 +24,12 @@ export function ownedProcessTree(tree, rootPid, startedAt) {
   return owned;
 }
 
-export async function terminateOwnedTree(child, startedAt) {
+export async function terminateOwnedTree(child, startedAt, executeCommand = execute) {
   if (child.exitCode !== null || child.signalCode !== null) return { status: 'already_exited', pid: child.pid };
   if (process.platform === 'win32') {
     const windowsCommand = async (script, stage) => {
       try {
-        return await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
+        return await executeCommand('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
           { windowsHide: true, timeout: 20000, maxBuffer: 131072 });
       } catch (error) {
         error.cleanup = { status: 'unconfirmed', pid: child.pid, reason: stage, exitCode: error.code,
@@ -48,16 +48,19 @@ export async function terminateOwnedTree(child, startedAt) {
       throw error;
     }
     if (!root) return { status: 'already_exited', pid: child.pid, tree };
+    let terminationFailure;
     if (child.exitCode === null && child.signalCode === null) {
       const ownedIdentities = tree.map(entry => `@{pid=${entry.pid};started='${entry.started}';name='${entry.name}'}`).join(',');
       const stop = `foreach ($item in @(${ownedIdentities})) { $p = Get-CimInstance Win32_Process -Filter "ProcessId = $($item.pid)"; if ($p -and $p.CreationDate.ToUniversalTime().ToString('o') -eq $item.started -and $p.Name -eq $item.name) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue } }`;
-      await windowsCommand(stop, 'termination_failed');
+      try { await windowsCommand(stop, 'termination_failed'); }
+      catch (error) { terminationFailure = error.cleanup; }
     }
     const identities = tree.map(p => `@{pid=${p.pid};started='${p.started}'}`).join(',');
     const verify = `$alive = @(); foreach ($item in @(${identities})) { $p = Get-CimInstance Win32_Process -Filter "ProcessId = $($item.pid)"; if ($p -and $p.CreationDate.ToUniversalTime().ToString('o') -eq $item.started) { $alive += $item.pid } }; ConvertTo-Json -InputObject @($alive) -Compress`;
     const checked = await windowsCommand(verify, 'verification_failed');
     const survivors = JSON.parse(checked.stdout || '[]');
-    return { status: survivors.length ? 'unconfirmed' : 'terminated', pid: child.pid, tree, survivors };
+    return { status: survivors.length ? 'unconfirmed' : 'terminated', pid: child.pid, tree, survivors,
+      ...(terminationFailure ? { terminationFailure } : {}) };
   }
   process.kill(-child.pid, 'SIGKILL');
   const deadline = Date.now() + 5000;
