@@ -191,4 +191,9 @@ The new HTTP regression failed with 502 before the fix and passed after it. All 
 Evidence: `.bridge/release-regression-65ef9a1a-ea20-4542-be12-afeeb274710d/` and `.bridge/release-regression-f8053d47-fbe8-4660-b920-a0bc528f04df/`.
 Source review remains pending for the repair. Windows cleanup diagnostics continue separately; `main` and the service remain unchanged.
 Diagnostic CI `37435713247` reported `cleanup_failed`, which excludes the newly recorded root identity mismatch case.
+
+2026-10-06 — working-tree from `75cc5c4`: label failed Windows snapshot, termination and verification commands separately.
+Retain bounded stderr from those controlled identity-only commands. These commands contain no task arguments or credentials.
+No process ownership, cancellation rule or timeout changes. All 237 local tests passed, exit 0.
+Evidence: `.bridge/release-regression-0cd959b8-ffe4-4e8b-91c9-57fd24d808f8/`. Diagnostic CI and source review remain pending.
 Desktop rendering and multiple live content chunks remain unverified. Shared Harness 0.62.1 rules remain current by meaning.

@@ -27,9 +27,18 @@ export function ownedProcessTree(tree, rootPid, startedAt) {
 export async function terminateOwnedTree(child, startedAt) {
   if (child.exitCode !== null || child.signalCode !== null) return { status: 'already_exited', pid: child.pid };
   if (process.platform === 'win32') {
+    const windowsCommand = async (script, stage) => {
+      try {
+        return await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
+          { windowsHide: true, timeout: 20000, maxBuffer: 131072 });
+      } catch (error) {
+        error.cleanup = { status: 'unconfirmed', pid: child.pid, reason: stage, exitCode: error.code,
+          diagnostic: String(error.stderr ?? '').slice(0, 2048) };
+        throw error;
+      }
+    };
     const script = `$q = [System.Collections.Generic.Queue[int]]::new(); $q.Enqueue(${child.pid}); $seen = @{}; $rows = @(); while ($q.Count -gt 0 -and $rows.Count -lt 256) { $n = $q.Dequeue(); if ($seen.ContainsKey($n)) { continue }; $seen[$n] = $true; $p = Get-CimInstance Win32_Process -Filter "ProcessId = $n"; if ($p) { $rows += [pscustomobject]@{pid=$p.ProcessId; parent=$p.ParentProcessId; name=$p.Name; started=$p.CreationDate.ToUniversalTime().ToString('o')}; Get-CimInstance Win32_Process -Filter "ParentProcessId = $n" | ForEach-Object { $q.Enqueue([int]$_.ProcessId) } } }; ConvertTo-Json -InputObject @($rows) -Compress`;
-    const { stdout } = await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script],
-      { windowsHide: true, timeout: 20000, maxBuffer: 131072 });
+    const { stdout } = await windowsCommand(script, 'snapshot_failed');
     const snapshot = JSON.parse(stdout || '[]');
     const tree = ownedProcessTree(snapshot, child.pid, startedAt);
     const root = tree.find(x => x.pid === child.pid);
@@ -42,13 +51,11 @@ export async function terminateOwnedTree(child, startedAt) {
     if (child.exitCode === null && child.signalCode === null) {
       const ownedIdentities = tree.map(entry => `@{pid=${entry.pid};started='${entry.started}';name='${entry.name}'}`).join(',');
       const stop = `foreach ($item in @(${ownedIdentities})) { $p = Get-CimInstance Win32_Process -Filter "ProcessId = $($item.pid)"; if ($p -and $p.CreationDate.ToUniversalTime().ToString('o') -eq $item.started -and $p.Name -eq $item.name) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue } }`;
-      await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', stop],
-        { windowsHide: true, timeout: 20000, maxBuffer: 131072 });
+      await windowsCommand(stop, 'termination_failed');
     }
     const identities = tree.map(p => `@{pid=${p.pid};started='${p.started}'}`).join(',');
     const verify = `$alive = @(); foreach ($item in @(${identities})) { $p = Get-CimInstance Win32_Process -Filter "ProcessId = $($item.pid)"; if ($p -and $p.CreationDate.ToUniversalTime().ToString('o') -eq $item.started) { $alive += $item.pid } }; ConvertTo-Json -InputObject @($alive) -Compress`;
-    const checked = await execute('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', verify],
-      { windowsHide: true, timeout: 20000, maxBuffer: 131072 });
+    const checked = await windowsCommand(verify, 'verification_failed');
     const survivors = JSON.parse(checked.stdout || '[]');
     return { status: survivors.length ? 'unconfirmed' : 'terminated', pid: child.pid, tree, survivors };
   }
