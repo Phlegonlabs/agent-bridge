@@ -80,6 +80,7 @@ function statusFor(code) {
   if (/^SESSION_/.test(code)) return 409;
   if (/^(MODEL_EFFORT_|CURSOR_EFFORT_)/.test(code)) return 400;
   if (code === 'DEPENDENCIES_NOT_READY') return 409;
+  if (code === 'CODEX_CONTENT_REJECTED') return 400;
   if (['RATE_LIMITED', 'QUEUE_FULL'].includes(code)) return 429;
   if (['TIMEOUT', 'REQUEST_TIMEOUT', 'CANCELLED'].includes(code)) return 504;
   if (/^(INVALID|UNKNOWN|UNSUPPORTED)/.test(code)) return 400;

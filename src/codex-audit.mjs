@@ -1,4 +1,5 @@
 import { BridgeError } from './profiles.mjs';
+import { codexErrorCode } from './codex-errors.mjs';
 
 // exec --json only reports thread/turn/item events; the dispatched model lives in
 // the session rollout's turn_context records, so runCodex supplies them at finish.
@@ -23,7 +24,7 @@ export function createCodexAudit(model, requestedEffort = null) {
       const retry = typeof event.message === 'string'
         ? /^Reconnecting\.\.\. ([1-9]\d*)\/([1-9]\d*) \([^\r\n]+\)$/.exec(event.message) : null;
       if (!threadId || !retry || !Number.isSafeInteger(Number(retry[1])) ||
-          !Number.isSafeInteger(Number(retry[2])) || Number(retry[1]) > Number(retry[2])) reject('CODEX_REPORTED_ERROR');
+          !Number.isSafeInteger(Number(retry[2])) || Number(retry[1]) > Number(retry[2])) reject(codexErrorCode(event.message));
       warnings.push({ code: 'CODEX_RECONNECTING', message: event.message });
       return;
     }
@@ -43,7 +44,7 @@ export function createCodexAudit(model, requestedEffort = null) {
           const metadataNotice = `Model metadata for \`${model}\` not found. Defaulting to fallback metadata; this can degrade performance and cause issues.`;
           const code = typeof message === 'string' && message.startsWith('Exceeded skills context budget.')
             ? 'CODEX_SKILLS_CONTEXT_BUDGET' : message === metadataNotice ? 'CODEX_MODEL_METADATA_FALLBACK' : undefined;
-          if (!code) reject('CODEX_REPORTED_ERROR');
+          if (!code) reject(codexErrorCode(message));
           warnings.push({ code, message });
         } else if (!ALLOWED_ITEM_TYPES.has(event.item.type)) {
           // The relay task allows only built-in reads; a shell command, file edit,

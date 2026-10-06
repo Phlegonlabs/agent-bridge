@@ -157,6 +157,18 @@ test('Codex rejects duplicate threads, events after the turn, and malformed line
   assert.equal(evaluate([thread, 'not json', message, turn]).code, 'CODEX_INVALID_EVENT');
 });
 
+test('Codex identifies upstream content rejection without accepting or exposing the failed answer', () => {
+  const rejected = { type: 'item.completed', item: { type: 'error',
+    message: 'unexpected status 502 Bad Gateway: This content was flagged for possible policy violations. PRIVATE_ERROR_BODY' } };
+  const result = evaluate([thread, rejected, message, turn]);
+  assert.equal(result.ok, false); assert.equal(result.code, 'CODEX_CONTENT_REJECTED');
+  assert.doesNotMatch(JSON.stringify(result), /PRIVATE_ERROR_BODY|DONE/);
+  assert.equal(evaluate([thread, { type: 'error', message: rejected.item.message }]).code, 'CODEX_CONTENT_REJECTED');
+  assert.equal(evaluate([thread, { ...message, item: { ...message.item, text: rejected.item.message } }, turn]).ok, true);
+  assert.equal(evaluate([thread, { ...rejected, item: { ...rejected.item, message: 'unexpected status 502 Bad Gateway: overloaded' } }]).code,
+    'CODEX_REPORTED_ERROR');
+});
+
 test('Codex reports CLI failure and timeouts', () => {
   assert.equal(evaluate([thread, message, turn], { exitCode: 1, reason: null }).code, 'CODEX_CLI_FAILED');
   assert.equal(evaluate([thread, message, turn], { exitCode: null, reason: 'timeout' }).code, 'TIMEOUT');

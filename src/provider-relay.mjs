@@ -13,6 +13,7 @@ import { resolveModelSelection } from './model-options.mjs';
 import { ClaudeSessions, jsonHash } from './claude-sessions.mjs';
 import { claudeDelegateBudget } from './claude-budgets.mjs';
 import { notifyProgress } from './task-progress.mjs';
+import { codexErrorMessage } from './codex-errors.mjs';
 
 export async function invokeCli(route, text, { signal, timeoutMs, directory, onPartial, cwd, effort, session, onNativeStarted, onProgress }) {
   let task = text, transportFile;
@@ -96,7 +97,7 @@ export class ModelRelay {
           await writeFile(this.limitFile(poolName), JSON.stringify({ until: this.pool.groups[poolName].cooldownUntil, quota: limit.quota }), { mode: 0o600 });
           throw Object.assign(new BridgeError('RATE_LIMITED', 'Provider rate limited this request. Its queue is cooling down.'), { worker: result });
         }
-        throw Object.assign(new BridgeError(result.code ?? 'RELAY_FAILED', 'The selected CLI failed.'), { worker: result });
+        throw Object.assign(new BridgeError(result.code ?? 'RELAY_FAILED', codexErrorMessage(result.code)), { worker: result });
       }
       this.pool.succeeded(poolName);
       return result;

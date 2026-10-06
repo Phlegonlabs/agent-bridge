@@ -22,6 +22,10 @@ Session-identified Claude turns with continuity retain execution when HTTP disco
 
 Codex and Cursor remain model relays: they return text or validated function calls for ZCode to execute. They do not perform workspace edits themselves. Codex receives the complete prompt through standard input and verifies the model and selected effort from its rollout under `CODEX_HOME`. Cursor verifies the exact catalog dispatch and the runtime model name. Requests accept text and function schemas; images are unsupported.
 
+An upstream Codex content rejection returns `CODEX_CONTENT_REJECTED`, rather than a generic connection failure.
+The bridge does not correct, replay or route that rejected request to another model.
+Before streaming headers, this error returns HTTP 400. An open stream receives the same code as an error event.
+
 The global concurrency ceiling is 14, with Codex capped at 4, Claude at 4 and Cursor at 12. Other desktop tasks are not counted. Configured Claude fallback follows its declared targets, effort and triggers after worker cleanup. GPT uses the original ZCode host tools and inspects partial work before continuing. The handoff persists for that Claude route and ZCode session, including later tool-result turns and bridge restarts. Other routes keep their model. Cancellation, permission denial, protocol errors and unconfirmed cleanup do not trigger fallback.
 
 Claude defaults to a 75-minute attempt and a 90-minute request, including queueing and any configured fallback.
