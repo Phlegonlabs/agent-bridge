@@ -29,5 +29,5 @@ test('interactive input cannot replace static input or write after EOF', async (
 
 test('interactive child obeys the existing absolute process deadline', async () => {
   const { result } = await run({ timeoutMs: 100, onStdin() {} });
-  assert.equal(result.reason, 'timeout'); assert.notEqual(result.cleanup?.status, 'unconfirmed');
+  assert.equal(result.reason, 'timeout'); assert.notEqual(result.cleanup?.status, 'unconfirmed', JSON.stringify(result));
 });

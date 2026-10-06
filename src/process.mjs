@@ -33,7 +33,11 @@ export async function terminateOwnedTree(child, startedAt) {
     const snapshot = JSON.parse(stdout || '[]');
     const tree = ownedProcessTree(snapshot, child.pid, startedAt);
     const root = tree.find(x => x.pid === child.pid);
-    if (!root && snapshot.some(entry => entry.pid === child.pid)) throw new Error('Owned PID identity could not be verified.');
+    if (!root && snapshot.some(entry => entry.pid === child.pid)) {
+      const error = new Error('Owned PID identity could not be verified.');
+      error.cleanup = { status: 'unconfirmed', pid: child.pid, startedAt, tree: snapshot, reason: 'identity_unverified' };
+      throw error;
+    }
     if (!root) return { status: 'already_exited', pid: child.pid, tree };
     if (child.exitCode === null && child.signalCode === null) {
       const ownedIdentities = tree.map(entry => `@{pid=${entry.pid};started='${entry.started}';name='${entry.name}'}`).join(',');
@@ -101,8 +105,8 @@ export async function runProcess({ command, args, cwd, env = process.env, timeou
     if (stopPromise) return stopPromise;
     reason = why;
     notifyProgress(onProgress, { type: 'stopping' });
-    stopPromise = terminateOwnedTree(child, startedAt).then(x => { cleanup = x; }).catch(() => {
-      cleanup = { status: 'unconfirmed', pid: child.pid };
+    stopPromise = terminateOwnedTree(child, startedAt).then(x => { cleanup = x; }).catch(error => {
+      cleanup = error.cleanup ?? { status: 'unconfirmed', pid: child.pid, reason: 'cleanup_failed' };
       if (child.exitCode === null && child.signalCode === null) child.kill();
     }).finally(async () => {
       // Sending a signal is not exit evidence. Wait for Node to reap the root

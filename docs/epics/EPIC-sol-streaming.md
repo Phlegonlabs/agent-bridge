@@ -154,4 +154,31 @@ Probe supervisor exited 0. After verification, active, queued and active delegat
 No native worker remains. Child PID 28836 is the replacement's console host, created at `2026-10-06T06:43:28.3425730Z`.
 Evidence: `.bridge/sol-reloaded-proof-39320e15-0a80-4b15-8117-b7b26459390d/stdout.log` and `.bridge/runs/87b7b47f-bf29-4356-af3b-28011745d105/`.
 The persistent provider remains active until owner shutdown. No account, configuration, rejected task or remote Git state changed.
+
+## Release verification — 2026-10-06
+
+The owner requested commit, push, deployment and merge of all pending work.
+This supersedes the earlier publication restriction for this release.
+Entry branch: `codex/harness-refresh-0.61.0`; HEAD: `b1c75865f4aff8cddea8484ae2c0244dc03f0c95`; working tree: clean.
+Remote `main` remains `acb9b31304e5933134079f923a08544b24edb3f4`. No development branch or open PR exists.
+All 42 pending commits belong to the one observed work branch. Fifteen unpublished commits were pushed and read back.
+The release uses one parent writer and one independent source reviewer. There is no managed PLAN/RUN.
+
+The local bounded regression passed 236 tests, exit 0, on Windows Node 24.19.0.
+Evidence: `.bridge/release-regression-94bcc6a6-f815-4163-b59c-06b698cf570f/`.
+CI `37434905790` passed on Linux and macOS. Two Windows attempts reported unconfirmed short-deadline cleanup.
+The second attempt passed 235 tests and failed the interactive 100 ms deadline check.
+The first attempt also failed static cleanup and a 1,000 ms Cursor fixture deadline.
+These failures remain evidence; no runtime limit or identity check was relaxed.
+
+Working-tree from `b1c7586`: preserve safe process identity evidence when Windows cleanup cannot validate the root.
+Scope: `src/process.mjs`, cleanup assertion diagnostics and this record; trace: SOL-003; UI impact: none.
+The record contains process IDs, names and creation times, with no arguments or credential values.
+Cleanup behavior remains unchanged. The next CI run must identify the failed cleanup stage before a repair.
+The diagnostic candidate passed all 236 local tests, exit 0. Source review, `main` merge and deployment remain pending.
+Evidence: `.bridge/release-regression-44ec1e85-b5d2-40c5-a308-c333d78957cb/`.
+The existing provider, PID 32128, was ready and idle. It has not been stopped during release verification.
+Private diagnostics stay under the existing `.bridge/` ignore rule. No new artifact class requires an ignore change.
+Harness 0.62.1 template `feed8dcc70b3691d9822a1b05641d4502dae452fd1926954f09db3fc78fff62f` still matches shared rules by meaning.
+The local deployment paragraph is retained. Loaded skill identity remains unobserved.
 Desktop rendering and multiple live content chunks remain unverified. Shared Harness 0.62.1 rules remain current by meaning.

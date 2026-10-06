@@ -37,7 +37,7 @@ test('parallel runs preserve independent results', async () => {
 test('deadline terminates the owned process', async () => {
   const result = await runProcess(await options('setInterval(()=>{},1000)', { timeoutMs: 300 }));
   assert.equal(result.reason, 'timeout');
-  assert.notEqual(result.cleanup.status, 'unconfirmed');
+  assert.notEqual(result.cleanup.status, 'unconfirmed', JSON.stringify(result));
   assert.throws(() => process.kill(result.pid, 0));
 });
 test('output budget stops an unbounded writer', async () => {
