@@ -181,4 +181,14 @@ The existing provider, PID 32128, was ready and idle. It has not been stopped du
 Private diagnostics stay under the existing `.bridge/` ignore rule. No new artifact class requires an ignore change.
 Harness 0.62.1 template `feed8dcc70b3691d9822a1b05641d4502dae452fd1926954f09db3fc78fff62f` still matches shared rules by meaning.
 The local deployment paragraph is retained. Loaded skill identity remains unobserved.
+
+2026-10-06 — working-tree from `0d2f054`: the independent reviewer found a buffered owned-request regression.
+The server supplied a content callback even without streaming. Retained provisional content wrongly disabled the existing protocol correction.
+Only streaming unstructured Codex requests now supply that callback. Buffered requests retain one validated correction.
+Streaming retries of a buffered task return its audited result without another worker.
+Scope: `src/provider-server.mjs`, HTTP regression and this record; trace: SOL-002. Real streamed prefixes still prohibit correction.
+The new HTTP regression failed with 502 before the fix and passed after it. All 237 local tests passed, exit 0.
+Evidence: `.bridge/release-regression-65ef9a1a-ea20-4542-be12-afeeb274710d/` and `.bridge/release-regression-f8053d47-fbe8-4660-b920-a0bc528f04df/`.
+Source review remains pending for the repair. Windows cleanup diagnostics continue separately; `main` and the service remain unchanged.
+Diagnostic CI `37435713247` reported `cleanup_failed`, which excludes the newly recorded root identity mismatch case.
 Desktop rendering and multiple live content chunks remain unverified. Shared Harness 0.62.1 rules remain current by meaning.

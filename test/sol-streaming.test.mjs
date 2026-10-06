@@ -33,7 +33,7 @@ async function fixture(work, mode = 'valid') {
     if (mode === 'tool') response = JSON.stringify({ nonce, content: null, tool_calls: [{ name: 'read_probe', arguments: { path: 'fixture' } }] });
     else if (mode === 'structured') { assert.equal(settings.onPartial, undefined); response = JSON.stringify({ nonce, content: '{}', tool_calls: [] }); }
     else {
-      const suffix = `second", "tool_calls": ${mode === 'bad-final' ? '[{"name":"undeclared","arguments":{}}]'
+      const suffix = `second", "tool_calls": ${mode === 'bad-final' || mode === 'correctable' && calls === 1 ? '[{"name":"undeclared","arguments":{}}]'
         : mode === 'mixed' ? '[{"name":"read_probe","arguments":{"path":"fixture"}}]' : '[]'}}`;
       settings.onPartial?.(suffix); response = prefix + suffix;
     }
@@ -122,6 +122,23 @@ test('Sol content rejection remains explicit and returns HTTP 400 before streami
     assert.equal(result.error.code, 'CODEX_CONTENT_REJECTED'); assert.match(result.error.message, /content checks/);
     assert.equal(calls(), 1);
   }, 'rejected');
+});
+
+test('owned buffered requests retain one protocol correction without exposing provisional content', async () => {
+  for (const session of [true, false]) await fixture(async ({ request, body, pending, calls }) => {
+    pending.resolve();
+    const response = await request({ ...body, stream: false }, AbortSignal.timeout(4000), session);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).choices[0].message.content, 'first second');
+    assert.equal(calls(), 2);
+    if (session) {
+      const retry = await request(body); let text = '', done = false;
+      for await (const frame of frames(retry)) {
+        text += frame.choices?.[0]?.delta?.content ?? ''; done ||= frame.done === true;
+      }
+      assert.equal(text, 'first second'); assert.equal(done, true); assert.equal(calls(), 2);
+    }
+  }, 'correctable');
 });
 
 test('validated tool calls retain accompanying content while structured responses stay buffered', async () => {

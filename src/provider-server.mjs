@@ -166,7 +166,7 @@ export function createProviderServer({ config, token, relay, pool = new Provider
           timeoutMs: route.provider === 'claude' ? claudeDelegateBudget(config).requestTimeoutMs : config.requestTimeoutMs,
           start: async (signal, taskProgress, emit) => {
             const { message, evidence } = await relay.complete(body, { signal, transport, progress: taskProgress,
-              ...(route.provider === 'codex' ? { onContentDelta: emit } : {}) });
+              ...(route.provider === 'codex' && body.stream && !body.response_format ? { onContentDelta: emit } : {}) });
             if (Buffer.byteLength(JSON.stringify(completion(message, body.model))) > MAX_RESPONSE_BYTES) {
               throw new BridgeError('RESPONSE_TOO_LARGE', 'Model response exceeds the local limit.');
             }
