@@ -16,6 +16,8 @@
 - [Delegate observability](epics/EPIC-delegate-observability.md): per-task lifecycle, native activity, inline Claude status and workflow/subagent checks.
 - [Sol connection and streaming](epics/EPIC-sol-streaming.md): upstream rejection diagnosis, native answer streaming and verification.
 - `skills/codex-imagegen/SKILL.md`: ZCode instructions for native Codex image generation; set the bridge path for your checkout before installing.
+- [ZCode chat images](zcode-images.md): default image routing with the existing Codex skill.
+- [ZCode image routing](epics/EPIC-zcode-image-routing.md): local chat routing changes and verification limits.
 - `docs/epics/native-provider.md`: implementation scope and native protocol evidence.
 
 

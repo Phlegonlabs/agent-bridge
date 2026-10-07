@@ -210,7 +210,7 @@ Standalone Claude 維持唯讀；可寫執行和持續 session 屬於已設定�
 
 ## 圖片、Sessions 及維護
 
-- **Codex 圖片：** 把描述寫入 UTF-8 prompt 檔案，再執行 `node bin/codex-image.mjs --cwd . --prompt-file PROMPT_FILE`。使用原生 Codex 圖片生成及現有登入，不會改用付費 Image API。已驗證的 PNG 複製至新的 `generated-images/codex-UUID/image.png` 目錄。安裝附帶的 [ZCode skill](skills/codex-imagegen/SKILL.md) 前，要填入你的 checkout 路徑；此入口不支援參考圖片編輯。
+- **Codex 圖片：** 把描述寫入 UTF-8 prompt 檔案，再執行 `node bin/codex-image.mjs --cwd . --prompt-file PROMPT_FILE`。使用原生 Codex 圖片生成及現有登入，不會改用付費 Image API。已驗證的 PNG 複製至新的 `generated-images/codex-UUID/image.png` 目錄。安裝附帶的 [ZCode skill](skills/codex-imagegen/SKILL.md) 前，要填入你的 checkout 路徑；此入口不支援參考圖片編輯。一般 ZCode 聊天生圖可配合既有 skill 使用[聊天路由規則](docs/zcode-images.md)，明確指定的圖片 provider 或模型優先。
 - **Claude sessions：** 已完成 turns 延續原生 session，重複的已完成請求使用儲存結果。工作區／政策改變或未確認的中斷寫入會被拒絕。使用 `node scripts/claude-session-recovery.mjs .bridge/provider/sessions inspect --session-id ID --session-type TYPE` 檢查。Recovery 前必須確認原生歷史、檔案及程序狀態，詳見 [recovery 說明](docs/native-provider.md)。
 - **更新：** 檢查執行中的工作，再停止自己的 provider、pull repo、執行 `npm ci --ignore-scripts`，檢查 catalog 改變，然後重新 setup 或執行 `node scripts/register-provider.mjs --update`。自訂註冊使用 `--config FILE`。明確重新啟動，既有 sessions 不會被自動重跑或遷移。
 - **上限：** 全域 14、Codex 4、Claude 4、Cursor 12。Claude 預設單次 attempt 75 分鐘，含排隊的 request 90 分鐘。可在 provider 設定中調整 `claudeDelegate.attemptTimeoutMs` 及 `claudeDelegate.requestTimeoutMs`。未設定時使用這些預設值，不改寫既有檔案。Codex 及 Cursor 保留通用設定中的上限；批次 preset 的期限獨立計算。本機上限不計算其他應用程式消耗的訂閱額度。不支援的 reasoning strength 會明確失敗。
