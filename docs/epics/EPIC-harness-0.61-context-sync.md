@@ -35,3 +35,13 @@ Commit identity is retained in the external per-checkout receipt, rather than a 
 
 The English product sources and existing approvals remain authority. Historical design packages and managed RUNs stay unchanged.
 This record covers context maintenance only. Product readiness, deployment setup, unresolved bindings and loaded runtime identity remain separate checks.
+
+## 2026-10-07 — Harness 0.62.3 context entry
+
+The owner requested the update across the GitHub folders. UI impact: none; direct maintenance by one parent writer.
+Baseline: `a08b9744558ee7e892e91dfd59a6e77d8fbe849e` on `codex/zcode-image-routing`. Prior unrelated changes remain observed/unverified.
+Scope: `AGENTS.md`.
+Installed template SHA-256: `0ab60fc38dbad32ed6025833a1ea152c7d2e38da5b8c22a6584f25edb082de11`. Loaded skill identity remains unknown.
+Moved shared procedures behind mandatory routes. Retained local rule text, skill pins, deployment facts and historical RUN bytes.
+Verification: exact retained-section comparison, local link/anchor checks, scoped whitespace check and independent review. Final results and commit identity are recorded in the checkout-external GitHub synchronization report.
+No product tests are applicable. This update grants no push, deployment, installation, archival or cleanup.
