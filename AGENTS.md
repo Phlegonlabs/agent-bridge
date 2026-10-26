@@ -14,16 +14,13 @@ Existing data protection and action authorization still apply.
 
 ## Harness Version
 
-- The owner selected development candidate `0.69.0` on 2026-10-25 for new work.
-- Source: `4b46736d8665d9ad5704e3a31b6f4fb8f6bbe7d7`; this candidate is not a tagged release.
-- Candidate skills root: `C:/Users/mps19/.agents/skill-candidates/pdh-0.69.0-4b46736d/skills`. The shared installation is unchanged.
-- Seven-skill contract SHA-256: `d4bb059a057766f65bb886de3fcc6743e5ad3fc719513f4c64e3051693db3a23`.
-- Resolve `delivery-harness/` references from the candidate root. Pass it first to `--skill-dir` and as `--skills-root`.
-- Keep `C:/Users/mps19/.agents/skills` as the second `--skill-dir` for the existing external skills.
+- Shared installation: Harness `0.72.0` from released `v0.72.0` (`e1cd13a4af3e5b916e57bb2d3ba0978a1e001f4e`), installed 2026-10-26 under `C:/Users/mps19/.agents/skills`.
+- Seven-skill contract SHA-256: `06ca34cf1fc2c9f3846c7eb035236fa251ac1727955bce0d25ebc61801f4d50d`.
+- Resolve `delivery-harness/` references, `--skill-dir` and `--skills-root` from the shared installation.
 - Preserve unresolved bindings, product approvals, original PLAN/RUN pins and their evidence. This adoption does not resume a RUN.
 - Active workers finish on their pinned bundle. New dispatch needs fresh capability checks; loaded session identity remains unobserved.
-- Use one combined final review, one consolidated repair and one targeted recheck for new direct work. Preserve historical review budgets.
-- Keep one current PRD. New product rounds use an Epic-aligned PRD delta and the Ambition contract; legacy packages remain valid.
+- Each new review stage gets at most two passes: the initial review and one targeted re-check after one consolidated repair. A defect found after that is fixed in isolation and gets a scoped review of the repair only. Preserve historical review budgets.
+- Keep one current PRD. New product rounds use an Epic-aligned PRD delta and the Ambition contract. A new round may add the At a Glance `Delivery profile` and `Shape` rows and a `## Growth Contract`; legacy packages remain valid.
 
 ## Runtime Boundary
 
