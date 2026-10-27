@@ -1,10 +1,50 @@
+![Agent Bridge — three native CLI paths cross a glass bridge into one workspace](docs/assets/agent-bridge-cover.png)
+
 # Agent Bridge
 
-[繁體中文](README.zh-TW.md)
+**Your CLIs. One workspace.**
 
-Connect ZCode to your installed Codex, Cursor and Claude Code CLIs. Each CLI keeps its own account login. GLM uses ZCode's native account connection and optional profile workflows.
+[繁體中文](README.zh-TW.md) · [Quick start](#quick-start) · [Setup guide](#1-install-the-prerequisites) · [Troubleshooting](#troubleshooting) · [Verification](docs/compatibility.md)
 
-This is a local bridge, not a hosted model service. It listens on `127.0.0.1`, verifies native model/session evidence, and keeps credentials and execution logs under ignored `.bridge/` state. It does not install the upstream apps or provide model subscriptions.
+Connect **ZCode** to your installed **Codex, Cursor and Claude Code** CLIs. Each CLI uses its existing account login.
+GLM stays on ZCode's native connection, with optional profile workflows.
+
+Agent Bridge runs on your machine at `127.0.0.1`. It checks native model and session evidence before accepting results.
+Credentials and execution logs stay in ignored `.bridge/` state. Install the upstream apps and arrange model access separately.
+
+## What you can do
+
+- **Use your CLI models in ZCode.** Choose a provider, model and supported reasoning level from the model selector.
+- **Delegate workspace tasks to Claude.** Let Claude Code use its own tools under the configured file and command permissions.
+- **Follow long tasks.** View labelled lifecycle status, stream Codex answers and reconnect to session-owned work.
+- **Run independent workflow jobs.** Use saved presets or explicit job assignments with bounded concurrency and deadlines.
+- **Generate images with Codex.** Use the separate image command and your existing Codex login.
+
+Codex and Cursor return text or validated tool calls for ZCode to execute. Claude delegates can edit the workspace.
+Streamed Codex text remains provisional until final verification; tool calls wait for validation.
+
+## Quick start
+
+You need **Git, Node.js 24+, ZCode**, and at least one supported CLI with model access.
+Open ZCode and complete its first-launch setup. Install your chosen CLI using the [prerequisite guide](#1-install-the-prerequisites).
+
+```sh
+git clone https://github.com/Phlegonlabs/agent-bridge.git
+cd agent-bridge
+npm ci --ignore-scripts
+node bin/bridge.mjs setup
+node bin/provider.mjs
+```
+
+The interactive wizard selects providers and models, offers login, then saves and registers your choices in ZCode.
+Review the displayed permissions before saving. Keep the provider terminal running.
+
+In ZCode, select **Agent Bridge** for Codex/Cursor or **Claude Bridge** for Claude, then choose your configured model.
+For Claude, open a project workspace first. Send: **Reply BRIDGE_PROBE_OK without using tools or changing files.**
+
+Confirm the reply. If connection fails, follow [troubleshooting](#troubleshooting). Stop the foreground provider with Ctrl+C.
+
+> Model IDs below are examples. Use `models --provider PROVIDER` to inspect your local catalog, then verify account access.
 
 ## Choose a connection
 
@@ -178,6 +218,8 @@ The batch workflow accepts explicit independent `{id, worker, task}` jobs or use
 
 ## Troubleshooting
 
+### Reconnect to an existing task
+
 For session-identified Codex and long Claude tasks, reconnect with the same session headers, model, effort and request content.
 The bridge attaches identical retries to the existing task, even when switching between streaming and buffered responses.
 Completed retries return the audited result without another worker.
@@ -186,14 +228,27 @@ Closing the connection detaches it; the worker continues until completion, its d
 Reconnects do not reset deadlines.
 Provider shutdown waits for worker cleanup.
 After a service crash, unfinished sessions require inspection before recovery.
+
+### Inspect progress
+
 The authenticated `/status` endpoint reports active delegate jobs, waiters and retained results.
-Use `node bin/bridge.mjs status --watch` to inspect individual workflow actor and subagent requests.
-Filter with `--task-id UUID` or `--session-id ID --session-type subagent`.
-Use `--cwd /absolute/project/path` to match requests with that declared working directory.
+Inspect individual workflow actor and subagent requests with the CLI:
+
+```sh
+node bin/bridge.mjs status --watch
+node bin/bridge.mjs status --task-id UUID
+node bin/bridge.mjs status --session-id ID --session-type subagent --watch
+node bin/bridge.mjs status --cwd /absolute/project/path --watch
+```
+
+Project lookup matches the request's declared working directory. Use `--config FILE` for a custom provider configuration.
 Task IDs arrive in the `X-Agent-Bridge-Task-Id` response header.
 Status separates queueing, worker start, last observed native activity, cleanup and audited completion.
 Heartbeat and polling do not advance activity. Silence does not trigger a rerun.
 The monitor ends after ten minutes by default; Ctrl+C stops only monitoring.
+
+### Understand streaming and retained results
+
 Owned Claude streams show lifecycle, elapsed time and recent activity in ZCode's Thought area.
 Codex streams show the same labelled status and native answer deltas. Reconnects replay the retained answer prefix.
 Tool calls and structured responses remain buffered until verification. Failed partial streams cannot trigger correction or fallback.
@@ -205,6 +260,8 @@ Workflow status is the last recorded snapshot; it does not certify that an old p
 Results remain cached for up to 15 minutes, within count and memory limits.
 Completed Claude receipts also support replay after cache expiry or restart.
 HTTP reconnection cannot guarantee exactly-once rendering in the host UI.
+
+### Resolve common errors
 
 | Result | Next step |
 | --- | --- |
@@ -220,6 +277,17 @@ HTTP reconnection cannot guarantee exactly-once rendering in the host UI.
 | CLI works but ZCode cannot connect | Confirm the provider is running, select its registered provider/model, and bypass proxies for `localhost,127.0.0.1`. |
 
 Optional environment overrides: `ZCODE_BRIDGE_CLI` (official `zcode.cjs`), `CLAUDE_BRIDGE_BIN` and `CODEX_BRIDGE_BIN` (native executable), `CURSOR_BRIDGE_BIN` (official `agent` executable), `CURSOR_BRIDGE_DIR` (official runtime package directory) and `CODEX_HOME` (existing Codex state). Set them in the terminal that runs setup/provider; the bridge does not rewrite your shell profile. Linux AppImage users can extract the app and point `ZCODE_BRIDGE_CLI` at its `resources/glm/zcode.cjs`.
+
+## Detailed guides
+
+| Guide | Use it for |
+| --- | --- |
+| [Native provider](docs/native-provider.md) | Routing, permissions, streaming, session recovery and task status |
+| [Workflow presets](docs/workflow-presets.md) | Batch jobs, model selection, deadlines and preset fallback |
+| [Cursor CLI](docs/cursor.md) | Cursor runtime discovery, trust and native model evidence |
+| [Compatibility](docs/compatibility.md) | Offline, authenticated CLI and desktop verification boundaries |
+| [Local deployment](docs/DEPLOYMENT.md) | Recorded source identity, private state and deliberate restarts |
+| [Document index](docs/DOCUMENTS.md) | All guides and implementation records |
 
 ## Development and evidence
 

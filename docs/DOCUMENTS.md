@@ -1,7 +1,8 @@
 # Documents
 
-- `README.md`: complete setup, model catalog, provider and CLI usage, workflows, image generation, recovery and limitations.
+- `README.md`: generated cover, quick start, complete setup, provider and CLI usage, workflows, recovery and limitations.
 - `README.zh-TW.md`: the same public setup guide in Traditional Chinese.
+- [README presentation](epics/EPIC-readme-presentation.md): bilingual entry points, generated cover and documentation checks.
 - [Local deployment](DEPLOYMENT.md): source identity, running provider, verification and safe restart.
 - `examples/agents/`: generic read-only GLM profiles; the example installer refuses overwrites.
 - `docs/epics/bridge.md`: historical scope, checkpoints and verification obligations.
