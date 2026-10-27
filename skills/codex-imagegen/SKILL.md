@@ -1,13 +1,18 @@
 ---
 name: codex-imagegen
-description: Generate images using this machine's existing Codex login and built-in image generation. Use when the user asks for Codex images, included Codex image generation, or shared Codex image capability from ZCode.
+description: Default new-image generation for ordinary ZCode chats using the existing Codex login. Use for requests to generate an image, picture, illustration, poster, cover, or 生圖/生成圖片, unless the user explicitly selects another image provider or model.
 user-invocable: true
 ---
 
 # Codex image generation
 
-Use this skill when the user wants to generate images through Codex from ZCode.
+Use this skill for ordinary new-image requests in ZCode, including requests that do not name Codex.
 This uses Codex's built-in `image_gen.imagegen` tool and included Codex usage.
+The chat's selected text model does not change this image route.
+
+Honor an explicitly selected image provider or model. Do not override that choice with Codex.
+This entry cannot edit reference images. If references are required, report that limit and stop without generating.
+Do not silently send an unsupported request or a failed generation to the backend `image-gen` skill.
 
 1. Write the user's image description to a new UTF-8 text file in the current workspace. Preserve requested subjects, style, layout, and text. Use a unique filename; keep existing files.
 2. Run this command through ZCode's Bash tool. Replace `BRIDGE_DIRECTORY` with the installed agent-bridge checkout, and replace the workspace and prompt file paths. Use the local Node.js executable. Allow up to six minutes for the command, and wait for it to finish. Do not rerun while it is still active.
