@@ -14,8 +14,9 @@ Existing data protection and action authorization still apply.
 
 ## Harness Version
 
-- Shared installation: Harness `0.72.0` from released `v0.72.0` (`e1cd13a4af3e5b916e57bb2d3ba0978a1e001f4e`), installed 2026-10-26 under `C:/Users/mps19/.agents/skills`.
-- Seven-skill contract SHA-256: `06ca34cf1fc2c9f3846c7eb035236fa251ac1727955bce0d25ebc61801f4d50d`.
+- Shared installation: Harness `0.73.0` from candidate `feat/surface-taxonomy` (`e84753009e68e41a958ec1ad5729578ed405c1c0`, not yet tagged), installed 2026-10-29 under `C:/Users/mps19/.agents/skills`.
+- Five-skill contract SHA-256: `f7bfe714dc63339802a96d726a8c2e07a64ffb442161b66dd06f0c7cfa06e92f`.
+- Surfaces: the PRD Shape track is one of `web`, `app`, `agent`, `tool`, `content`; release targets and presence surfaces follow `delivery-harness/references/surface-catalog.md`. External setup and Measurement Sources live in `docs/DEPLOYMENT.md`; the activation record is retired.
 - Resolve `delivery-harness/` references, `--skill-dir` and `--skills-root` from the shared installation.
 - Preserve unresolved bindings, product approvals, original PLAN/RUN pins and their evidence. This adoption does not resume a RUN.
 - Active workers finish on their pinned bundle. New dispatch needs fresh capability checks; loaded session identity remains unobserved.
@@ -48,7 +49,7 @@ The delivery flow binds stage slots, not fixed skill names. This table binds the
 | design_compilation | frozen design-system pair | `pending` | `pending` |
 | frontend_implementation | implementation missions | `pending` | `pending` |
 | ui_quality_verification | authorized HiFi/page-quality review | `pending` | `pending` |
-| code_security_verification | fresh unified code-security review before final regression and closeout | `pending` | `pending` |
+| code_security_verification | fresh unified code-security review before final regression and closeout | `delivery-harness/references/security-review.md` | `5295475dd52759654a5c9ea1aa0d1675c8c67dc79ea67324d3b31e92b3fd4548` |
 
 These rows are intentionally unresolved in the seed. Before managed work, observe the installed skill trees, show the exact choices and side effects to the owner, then replace each required stage slot with one skill name and its full-tree SHA-256. `pending` in both cells is allowed only outside the checked stage. Product Definition uses `--stage product-definition`; UI authoring uses `--stage ui-design`; compilation uses `--stage design-compilation`; a proven headless/backend-only scope uses `--stage backend`. Omit `--stage` for full UI delivery or unknown applicability. Recheck at every stage change; a stage result never authorizes a later stage. `frontend-design` is external and supports visual direction/frontend authoring only; do not claim compilation, conformance, or read-only modes it does not define. The pinned `impeccable` profile requires separate authorization for subagents, browser/server activity, snapshot writes, and any optional binary download; it is not a Harness read-only reviewer. `delivery-harness/scripts/check_skill_bindings.py` rejects unresolved, fenced, duplicate, malformed, missing, or drifted bindings. The code-security reviewer receives no implementation or lifecycle authority.
 
@@ -77,7 +78,7 @@ Resolve `delivery-harness/` references against the observed installed delivery-h
 | Branch, commit, integration, archive, publication, cleanup, or protected-branch landing | `delivery-harness/references/governance/managed-delivery.md#git-safety` and `delivery-harness/references/commit-convention.md` |
 | Managed PLAN/RUN | `delivery-harness/SKILL.md`, `delivery-harness/references/governance/managed-delivery.md#managed-product-delivery-harness-runs`, and `delivery-harness/references/project-operating-rules.md#managed-product-delivery-harness-runs` |
 | Deployment model, verification, or platform move | `delivery-harness/references/deployment-contract.md#deployment-contract` |
-| Post-delivery activation | `delivery-harness/references/project-operating-rules.md#post-delivery-activation` |
+| External setup and measurement sources | `delivery-harness/references/project-operating-rules.md#external-setup` |
 | Review or acceptance claim | `delivery-harness/references/governance/managed-delivery.md#review-guidelines` |
 
 The Epic and index record observed work; neither record grants product approval, marks a test PASS without evidence, or authorizes a commit, branch, install, push, deployment, cleanup, publication, or external action.
