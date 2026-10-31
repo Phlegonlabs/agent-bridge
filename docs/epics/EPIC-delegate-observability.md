@@ -223,3 +223,17 @@ The owner was asked to choose idle activation or a later activation. No schedule
 The document index now names inline Claude status. The working tree has no unrelated changes.
 Desktop Thought rendering has no before/after capture. This remains unverified, rather than a delivery PASS.
 The next action is activation after the active task ends, followed by a new native Agent visual check.
+
+## Handoff
+
+```text
+Repository / branch / HEAD / dirty paths: agent-bridge / main / a833dddfd67cd3f7857a079bf8370c083a4217b2 / none at 2026-10-31 entry; the commit carrying this block follows.
+Stage and skill: direct records maintenance under installed delivery-harness 0.74.0; no managed RUN; Epic stage: post-deployment desktop acceptance.
+Inputs consumed (path + hash or revision): this Epic fa65c18248bcf83f73245f1d2363dee3f8f4b8abb5292268cb19a2919b4b2cdd; docs/DEPLOYMENT.md d7163e306151fe387b33c306a1fdf6297cc5347909d8ee6d3a2138f9f5e4cd4b; docs/compatibility.md at revision a833ddd; AGENTS.md 6407d4ab0779ad7cedc0c7bb5fa546827c2906cac18d0cb852481aeae70216fe; docs/DOCUMENTS.md ada96395c17f9a1fb64d2ef836b14ecb34a702a9f4a407652eca533e34659bb3.
+Approvals in force (gate, owner, date, candidate): owner authorizations of 2026-10-05 for commit, push, deployment and the later local restart, recorded and executed in this Epic; docs/DEPLOYMENT.md records the 2026-10-06 release deployment of main at 7d7710a42a12a8e0249a851db7d39445f989dd05, which loads this Epic's inline status source and supersedes the earlier activation-timing question.
+Done and verified (command, exit code): live-document review and this block, no source change; python C:/Users/mps19/.agents/skills/delivery-harness/scripts/check_document_sync.py --repo-root . (exit 1, first-observation findings only); git diff --check (exit 0).
+Remaining: desktop Thought rendering of inline status has no visual capture and stays unverified. Real 60-minute task activity stays unverified.
+Blocked / waiting (gate name or owner decision): owner desktop visual check of a native Agent task; no gate.
+Next action (one command or one owner decision): owner decision: capture desktop Thought rendering during one native Agent task and record the result in this Epic.
+Next owner (skill or human): human owner.
+```

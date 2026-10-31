@@ -179,3 +179,17 @@ Local credentials, session receipts and logs were preserved and remained ignored
 Installed Harness 0.61.0 shared instructions remain current by meaning; loaded skill identity remains unknown.
 The document index still names the affected guides and this Epic.
 Real 60-minute Claude execution and desktop reconnect validation remain outstanding.
+
+## Handoff
+
+```text
+Repository / branch / HEAD / dirty paths: agent-bridge / main / a833dddfd67cd3f7857a079bf8370c083a4217b2 / none at 2026-10-31 entry; the commit carrying this block follows.
+Stage and skill: direct records maintenance under installed delivery-harness 0.74.0; no managed RUN; Epic stage: post-deployment acceptance validation.
+Inputs consumed (path + hash or revision): this Epic 10e3360164a1db3e430f7fa0e0f457eb92c7afc258260f30926f3d3bc987877b; AGENTS.md 6407d4ab0779ad7cedc0c7bb5fa546827c2906cac18d0cb852481aeae70216fe; CLAUDE.md 9d8ba938f5a36337e0a47bb97c453066090ed7271e04b7695fbb82429c58f7f4; docs/DOCUMENTS.md ada96395c17f9a1fb64d2ef836b14ecb34a702a9f4a407652eca533e34659bb3; docs/DEPLOYMENT.md d7163e306151fe387b33c306a1fdf6297cc5347909d8ee6d3a2138f9f5e4cd4b; docs/compatibility.md, docs/native-provider.md, README.md and README.zh-TW.md at revision a833ddd.
+Approvals in force (gate, owner, date, candidate): owner authorization of 2026-10-05 for commit, push and provider restart, recorded and executed in this Epic; the provider runs until explicit owner shutdown; no approval exists for the outstanding validation.
+Done and verified (command, exit code): live-document review and this block, no source change; python C:/Users/mps19/.agents/skills/delivery-harness/scripts/check_document_sync.py --repo-root . (exit 1, first-observation findings only); git diff --check (exit 0).
+Remaining: real 60-minute Claude execution and desktop reconnect validation stay unverified. Deferred fallback effort-drift and host tool-replay risks remain open.
+Blocked / waiting (gate name or owner decision): owner must run a real long Claude task through the local provider; no gate.
+Next action (one command or one owner decision): owner decision: run one real long Claude task through port 32147 and record reconnect and completion evidence in this Epic.
+Next owner (skill or human): human owner.
+```

@@ -229,3 +229,17 @@ Its local deployment paragraph now names the observed manual target. Loaded Harn
 No PRD, architecture, design package or managed PLAN/RUN exists; no product contract was rewritten.
 The persistent provider remains active until owner shutdown. Temporary verification processes exited; private artifacts remain ignored.
 Desktop rendering and multiple live content chunks remain unverified. Shared Harness 0.62.1 rules remain current by meaning.
+
+## Handoff
+
+```text
+Repository / branch / HEAD / dirty paths: agent-bridge / main / a833dddfd67cd3f7857a079bf8370c083a4217b2 / none at 2026-10-31 entry; the commit carrying this block follows.
+Stage and skill: direct records maintenance under installed delivery-harness 0.74.0; no managed RUN; Epic stage: post-deployment desktop acceptance.
+Inputs consumed (path + hash or revision): this Epic 822b3bd30adeb4e9dc5059a9b26dbc40ef3cff6f36f0a009933320c95e2d3ddd; docs/DEPLOYMENT.md d7163e306151fe387b33c306a1fdf6297cc5347909d8ee6d3a2138f9f5e4cd4b, which records deployed source 7d7710a42a12a8e0249a851db7d39445f989dd05 on port 32147; docs/compatibility.md at revision a833ddd.
+Approvals in force (gate, owner, date, candidate): owner-approved idle reload and the 2026-10-06 commit, push, merge and deployment, recorded and executed in this Epic; the provider runs until explicit owner shutdown.
+Done and verified (command, exit code): live-document review and this block, no source change; python C:/Users/mps19/.agents/skills/delivery-harness/scripts/check_document_sync.py --repo-root . (exit 1, first-observation findings only); git diff --check (exit 0).
+Remaining: desktop Sol rendering and multiple live content chunks remain unverified. Source parity with the deployed candidate must stay exact before reusing its receipts.
+Blocked / waiting (gate name or owner decision): owner desktop rendering observation of a streamed answer; no gate.
+Next action (one command or one owner decision): owner decision: observe desktop rendering of one streamed Sol answer and record the capture in this Epic.
+Next owner (skill or human): human owner.
+```

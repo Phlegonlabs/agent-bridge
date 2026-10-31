@@ -55,3 +55,17 @@ Independent reviewer `/root/image_routing_review` accepted that source and insta
 Dispatch binding: native reviewer, `gpt-6.1-sol` / `xhigh`; independent provider telemetry was unavailable.
 The reviewer inspected retained tests and verified installed parity and all 4,378 original AGENTS bytes.
 It reported no remaining findings. Live chat selection, generation and rendering remain outside this review.
+
+## Handoff
+
+```text
+Repository / branch / HEAD / dirty paths: agent-bridge / main / a833dddfd67cd3f7857a079bf8370c083a4217b2 / none at 2026-10-31 entry; the commit carrying this block follows.
+Stage and skill: direct records maintenance under installed delivery-harness 0.74.0; no managed RUN; Epic stage: runtime chat acceptance.
+Inputs consumed (path + hash or revision): this Epic 03841254336d724911c996f38ed2cea55a633817805527eaabdad47e3abe4129; docs/zcode-images.md and skills/codex-imagegen/SKILL.md at revision a833ddd; docs/DEPLOYMENT.md d7163e306151fe387b33c306a1fdf6297cc5347909d8ee6d3a2138f9f5e4cd4b.
+Approvals in force (gate, owner, date, candidate): recorded 2026-10-06 owner request for local routing configuration, executed; publication was outside that scope and was not performed.
+Done and verified (command, exit code): live-document review and this block, no source change; python C:/Users/mps19/.agents/skills/delivery-harness/scripts/check_document_sync.py --repo-root . (exit 1, first-observation findings only); git diff --check (exit 0).
+Remaining: live ZCode chat skill selection and one fresh generated image remain unverified.
+Blocked / waiting (gate name or owner decision): needs a new ZCode chat owned by the user; no gate.
+Next action (one command or one owner decision): owner decision: request one image in a new ZCode chat and record the selection and generation evidence in this Epic.
+Next owner (skill or human): human owner.
+```
