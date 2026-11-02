@@ -14,8 +14,8 @@ Existing data protection and action authorization still apply.
 
 ## Harness Version
 
-- Shared installation: Harness `0.74.1` from tag `v0.74.1` (`9e9280a711ce1a8e67578ccdc1ccb7cbfe848dc5`), installed 2026-10-31 under `C:/Users/mps19/.agents/skills`.
-- Five-skill contract SHA-256: `ea3fb3f1d0bc0831611e53310f0421c6ed332aa92822a801c8ae46c965d1bc3c`.
+- Shared installation: Harness `0.75.2` from tag `v0.75.2` (`d70347f898c700a64f05ec04712f533f79a4b92a`), installed 2026-11-02 under `C:/Users/mps19/.agents/skills`.
+- Five-skill contract SHA-256: `9ffdddabf8b701a672dbc037308e78dcd90f7ccf57407ac6eef7bb9bb24c1740`.
 - Surfaces: the PRD Shape track is one of `web`, `app`, `agent`, `tool`, `content`; release targets and presence surfaces follow `delivery-harness/references/surface-catalog.md`. External setup and Measurement Sources live in `docs/DEPLOYMENT.md`; the activation record is retired.
 - Resolve `delivery-harness/` references, `--skill-dir` and `--skills-root` from the shared installation.
 - Preserve unresolved bindings, product approvals, original PLAN/RUN pins and their evidence. This adoption does not resume a RUN.
