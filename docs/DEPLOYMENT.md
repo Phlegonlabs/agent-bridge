@@ -33,9 +33,13 @@ The deployment adds no environment keys. Existing local credentials remain priva
 The provider reads its local bearer token from `.bridge/provider/token`; authenticated checks verified it without printing its value.
 The selected CLIs retain their own account sign-ins. This deployment verified Codex access, not every configured model's entitlement.
 
-## External console setup
+## External Console Setup
 
 None. Deployment changed no account, provider registration, scheduled task, domain or hosted resource.
+
+| Service | Setting | Preview / non-production | Production | Owner | Status |
+| --- | --- | --- | --- | --- | --- |
+| none | n/a | n/a | n/a | n/a | n/a |
 
 ## State and recovery
 
