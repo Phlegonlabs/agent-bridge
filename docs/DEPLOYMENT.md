@@ -41,6 +41,13 @@ None. Deployment changed no account, provider registration, scheduled task, doma
 | --- | --- | --- | --- | --- | --- |
 | none | n/a | n/a | n/a | n/a | n/a |
 
+## Measurement Sources
+
+No measurement source applies: the provider is a loopback-only local service with no public surface, and neither the README nor any product document names a metric.
+
+| MS ID | Signals | Target | Environment | Retrieval | Source role | Release bindings | Owner | Status | Verified at | Evidence |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+
 ## State and recovery
 
 Existing `.bridge/` sessions, account state and private logs are preserved. Synthetic fixtures have separate directories and tokens.
