@@ -77,7 +77,7 @@ Claude defaults to 75-minute attempts and 90-minute requests, including queueing
 
 Private test evidence: `.bridge/claude-release-regression-1791184952379/stdout.log`.
 The [repair record](epics/EPIC-claude-long-task-reliability.md) retains checkpoints and remaining obligations.
-The public branch is `codex/harness-refresh-0.61.0`; it has not been merged into `main`.
+The public branch was `codex/harness-refresh-0.61.0`; it was not yet merged into `main` then, and `main` now contains it.
 Shutdown cancelled an active Codex request because the host kept submitting work.
 The old provider and its recorded worker exited before replacement startup.
 The owner requested persistent operation. The observability deployment above later replaced this provider.
