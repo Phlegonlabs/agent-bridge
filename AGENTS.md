@@ -14,8 +14,8 @@ Existing data protection and action authorization still apply.
 
 ## Harness Version
 
-- Shared installation: Harness `0.75.2` from tag `v0.75.2` (`d70347f898c700a64f05ec04712f533f79a4b92a`), installed 2026-11-02 under `C:/Users/mps19/.agents/skills`.
-- Five-skill contract SHA-256: `9ffdddabf8b701a672dbc037308e78dcd90f7ccf57407ac6eef7bb9bb24c1740`.
+- Shared installation: Harness `0.75.3` from tag `v0.75.3` (`645b433501b1dafc61634d992fb86c9f293c8c3e`), installed 2026-11-02 under `C:/Users/mps19/.agents/skills`.
+- Five-skill contract SHA-256: `a191bfa0f78af4ef856528173ae36d734275322f7a053a956e7788d76ea8f631`.
 - Surfaces: the PRD Shape track is one of `web`, `app`, `agent`, `tool`, `content`; release targets and presence surfaces follow `delivery-harness/references/surface-catalog.md`. External setup and Measurement Sources live in `docs/DEPLOYMENT.md`; the activation record is retired.
 - Resolve `delivery-harness/` references, `--skill-dir` and `--skills-root` from the shared installation.
 - Preserve unresolved bindings, product approvals, original PLAN/RUN pins and their evidence. This adoption does not resume a RUN.
@@ -28,7 +28,7 @@ Existing data protection and action authorization still apply.
 - This file is the entry. It contains authority boundaries and routes, not complete procedures. Preserve the current host's effective instruction discovery and precedence.
 - Within an explicitly requested skill workflow, apply `delivery-harness/references/delegation-contract.md` before assigning work to another executor or launching one. Resolve worker identity, model, effort, fallback and delegation from effective agent configuration and AGENTS instructions. Verify actual launch/result identity. The actual frontend author reads the complete pinned `frontend-design` SKILL.md and applicable project design skills in its own context; verify the full-tree pin independently. Fresh independent review binds the exact candidate. One writer owns each checkout, including the parent. Preserve required independent review and configured execution choices.
 - For explicitly requested managed execution, use the general runtime adapter reference (`delivery-harness/references/runtime-adapters.md`) for observed capabilities, authorization, isolation and result contracts. Host policy supplies role/model and explicit bridge bindings; shared skills supply no provider-specific model default. External execution retains its own authorization and capability checks.
-- Rules under **Managed Product Delivery Harness Runs** apply only after the Harness routes work into PLAN/RUN. Explicitly requested Harness direct work follows the shared principles, Git safety, and verification rules without creating Harness state, missions, workers, or worktrees unless the repository or user requires them.
+- The managed-run rules (`delivery-harness/references/project-operating-rules.md#managed-product-delivery-harness-runs`) apply only after the Harness routes work into PLAN/RUN. Explicitly requested Harness direct work follows the shared principles, Git safety, and verification rules without creating Harness state, missions, workers, or worktrees unless the repository or user requires them.
 - Preserve unrelated local work. Important local data needs explicit owner approval before deletion, overwrite, or move.
 - Give every new child fresh context and a scoped packet. State `max_message_bytes` and check the complete UTF-8 message before launch.
 
