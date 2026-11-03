@@ -33,8 +33,17 @@ Commit identity is retained in the external per-checkout receipt, rather than a 
 
 ## Handoff
 
-The English product sources and existing approvals remain authority. Historical design packages and managed RUNs stay unchanged.
-This record covers context maintenance only. Product readiness, deployment setup, unresolved bindings and loaded runtime identity remain separate checks.
+```text
+Repository / branch / HEAD / dirty paths: C:\Users\mps19\Documents\GitHub\agent-bridge / main (tracks origin/main) / 1f934ca28432ba6b3fb2ff5a55ec86102b6cec9b when written, before the handoff and baseline commits that follow it / 0 dirty paths before this edit; ignored .bridge/, .tmp-debug*/ and .zcode/ left alone
+Stage and skill: Harness 0.75.2 handoff documentation audit, direct documentation maintenance by one writer; no PLAN/RUN; UI impact none
+Inputs consumed (path + hash or revision): Harness 0.75.2, contract 9ffdddabf8b701a672dbc037308e78dcd90f7ccf57407ac6eef7bb9bb24c1740; VERSION sha256 4e956b077000ff778498540998af5f8304528a08ac4ef21f474f5d4d469f4cff; PROJECT_AGENTS.template.md sha256 5d4cdf94b9589ce5fce941a49271317b9edadf03a4f8a8c5f9f117f4f55329f4; PROJECT_CLAUDE.template.md sha256 39f476bc67ebd0b85acdbf22b0a1a91770b85c549c4d3d451526b784e6bc63b8; AGENTS.md sha256 f2656f19ce67fec47d046dda39535835e1dcdaa113884bb0838c0c6955c0d9f8; CLAUDE.md sha256 9d8ba938f5a36337e0a47bb97c453066090ed7271e04b7695fbb82429c58f7f4; loaded skill identity unobserved
+Approvals in force (gate, owner, date, candidate): none granted by this record; the owner asked for this audit on 2026-11-02; product approvals and original PLAN/RUN pins are unchanged (no docs/product package or docs/goal files exist here)
+Done and verified (command, exit code): AGENTS.md shared rules were stale in three spots (Required Reading scope line missing, ui_quality_verification stage text, impeccable side-effect pointer) and now match the template by meaning (3f6cde1); local rules kept: default-branch sentence, Harness Version section, max_message_bytes bullet, Required Reading routing, code_security_verification binding, resolved Deployment section. CLAUDE.md is current by meaning (its reviewer bullet is worded differently from the template, same rule). Live docs fixed (1f934ca): docs/compatibility.md said the 0.61.0 refresh branch was not merged into main, but main contains it; docs/DOCUMENTS.md now describes this Epic as the adoption log and handoff. README.md, README.zh-TW.md and docs/DEPLOYMENT.md had no wrong current-state claims. Checks: git diff --check exit 0; check_skill_bindings.py --stage product-definition exit 0; check_document_sync.py exit 1 with only loaded_identity_unobserved and document_changed for files edited here
+Remaining: product definition (no docs/product package), the pending UI stage bindings, and loaded runtime identity stay separate checks; docs/DEPLOYMENT.md has no Measurement Sources section although AGENTS.md says they live there
+Blocked / waiting (gate name or owner decision): owner decision on whether docs/DEPLOYMENT.md should gain a Measurement Sources section; nothing else is waiting
+Next action (one command or one owner decision): owner decision on the Measurement Sources section; otherwise none
+Next owner (skill or human): human owner
+```
 
 ## 2026-10-07 — Harness 0.62.3 context entry
 
