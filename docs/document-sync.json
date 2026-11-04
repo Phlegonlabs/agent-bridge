@@ -1,10 +1,10 @@
 {
   "schema": "document-sync/1",
-  "installed_digest": "a191bfa0f78af4ef856528173ae36d734275322f7a053a956e7788d76ea8f631",
+  "installed_digest": "19103632ce3eb28438ade6ac4fc7683106960533ca861d287031cf978c137d60",
   "documents": {
-    "AGENTS.md": "ce4192871c106cc595987c07e417a73957a8903c08ec72f6873cb80bd626c078",
+    "AGENTS.md": "4a7a16ead697695c4ad9a39ea83f63f6b1aa08866238c23883aa35d248e33c22",
     "AGENTS.override.md": null,
-    "CLAUDE.md": "9d8ba938f5a36337e0a47bb97c453066090ed7271e04b7695fbb82429c58f7f4",
+    "CLAUDE.md": "39f476bc67ebd0b85acdbf22b0a1a91770b85c549c4d3d451526b784e6bc63b8",
     "docs/DOCUMENTS.md": "815cbe6e94c55b1e69d000225879519714806ca13407d1e16fa35482e55338cf",
     "docs/product/PRD.md": null,
     "docs/product/architecture.md": null,
@@ -16,7 +16,7 @@
     "docs/epics/bridge.md": "b16a9f7f932b7f6c2ed3e73a4e490f9bd511005102d233a87a09ed057395bcc9",
     "docs/epics/EPIC-claude-long-task-reliability.md": "f3fd68b9f7390e1ec48b87ac13953638b5c00d27ab0b80ce54e1e5b084bc3786",
     "docs/epics/EPIC-delegate-observability.md": "e84a6508643d79968e73983a6c327a79e0b5525a3a5d6829cc2d98b8096b4792",
-    "docs/epics/EPIC-harness-0.61-context-sync.md": "8d008aa00be8125addcea51d63b987a7cd3b72a1f39a0de768b0657c69d9d3e9",
+    "docs/epics/EPIC-harness-0.61-context-sync.md": "b2984c9c207e2f3190c5ed3a9c6d322d0dc7a0f2976f14cb40875aa0b6a406fe",
     "docs/epics/EPIC-readme-presentation.md": "69d5f6166862d2cbcce24fc5612273b284811969e247c29d9562335c5fb919a8",
     "docs/epics/EPIC-sol-streaming.md": "bf835bd0e8d821b73879947a963708071f89bd2758b8197468aef4d95c523521",
     "docs/epics/EPIC-zcode-image-routing.md": "fa09cd06fd91b6ed84c8efa9ad87ca3e4a560dd6abbf995a1ad18653f2baf74a",
