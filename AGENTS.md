@@ -14,8 +14,8 @@ Existing data protection and action authorization still apply.
 
 ## Harness Version
 
-- Shared installation: Harness `0.75.3` from tag `v0.75.3` (`645b433501b1dafc61634d992fb86c9f293c8c3e`), installed 2026-11-02 under `C:/Users/mps19/.agents/skills`.
-- Five-skill contract SHA-256: `a191bfa0f78af4ef856528173ae36d734275322f7a053a956e7788d76ea8f631`.
+- Shared installation: Harness `0.76.0` from tag `v0.76.0` (`ece152192e54c1120b90ee88a58719b1bf577bc1`), installed 2026-11-02 under `C:/Users/mps19/.agents/skills`.
+- Five-skill contract SHA-256: `19103632ce3eb28438ade6ac4fc7683106960533ca861d287031cf978c137d60`.
 - Surfaces: the PRD Shape track is one of `web`, `app`, `agent`, `tool`, `content`; release targets and presence surfaces follow `delivery-harness/references/surface-catalog.md`. External setup and Measurement Sources live in `docs/DEPLOYMENT.md`; the activation record is retired.
 - Resolve `delivery-harness/` references, `--skill-dir` and `--skills-root` from the shared installation.
 - Preserve unresolved bindings, product approvals, original PLAN/RUN pins and their evidence. This adoption does not resume a RUN.
@@ -51,7 +51,7 @@ The delivery flow binds stage slots, not fixed skill names. This table binds the
 | design_compilation | frozen design-system pair | `pending` | `pending` |
 | frontend_implementation | implementation missions | `pending` | `pending` |
 | ui_quality_verification | authorized HiFi review / consolidated UI acceptance | `pending` | `pending` |
-| code_security_verification | fresh unified code-security review before final regression and closeout | `delivery-harness/references/security-review.md` | `5295475dd52759654a5c9ea1aa0d1675c8c67dc79ea67324d3b31e92b3fd4548` |
+| code_security_verification | fresh unified code-security review before final regression and closeout | `delivery-harness/references/security-review.md` | `d45bf1254b51c37f6563a3dd029d80423396dc57d52a34bffa9ad1b94587094c` |
 
 These rows are intentionally unresolved in the seed. Before managed work, observe the installed skill trees, show the exact choices and side effects to the owner, then replace each required stage slot with one skill name and its full-tree SHA-256. The `code_security_verification` slot is the exception: it binds `delivery-harness/references/security-review.md` with the SHA-256 of that file, not a separate skill. `pending` in both cells is allowed only outside the checked stage. Product Definition uses `--stage product-definition`; UI authoring uses `--stage ui-design`; compilation uses `--stage design-compilation`; a proven headless/backend-only scope uses `--stage backend`. Omit `--stage` for full UI delivery or unknown applicability. Recheck at every stage change; a stage result never authorizes a later stage. `frontend-design` is external and supports visual direction/frontend authoring only; do not claim compilation, conformance, or read-only modes it does not define. The pinned `impeccable` profile needs separate authorization for its side effects (`delivery-harness/references/verification-gates.md`); it is not a Harness read-only reviewer. `delivery-harness/scripts/check_skill_bindings.py` rejects unresolved, fenced, duplicate, malformed, missing, or drifted bindings. The security reviewer dispatched through `code_security_verification` receives no implementation or lifecycle authority.
 
