@@ -36,7 +36,7 @@ Existing data protection and action authorization still apply.
 
 These reading requirements apply only within an explicitly requested skill workflow.
 
-- Before explicitly requested managed Product Delivery Harness work, the session reads the managed PLAN/RUN owners in **Mandatory Governance Routes** and the installed `delivery-harness` SKILL.md (the orchestration skill itself, loaded as a skill rather than a table slot); the Skill Bindings table below pins the stage-slot skills the harness dispatches, and their pinned SHA-256 hashes are verified by `delivery-harness/scripts/check_skill_bindings.py`.
+- Before any managed Product Delivery Harness work, the session reads the managed PLAN/RUN owners in **Mandatory Governance Routes** and the installed `delivery-harness` SKILL.md (the orchestration skill itself, loaded as a skill rather than a table slot); the Skill Bindings table below pins the stage-slot skills the harness dispatches, and their pinned SHA-256 hashes are verified by `delivery-harness/scripts/check_skill_bindings.py`.
 - Before any product-affecting direct work, the session reads the affected sections of `docs/product/PRD.md` plus every document `docs/DOCUMENTS.md` names for that scope (retained wireframes, design package, architecture). A named source that does not exist yet is reported, not skipped.
 - Skipping this reading is a blocking review finding: a change built on unread contracts is not a completed change.
 

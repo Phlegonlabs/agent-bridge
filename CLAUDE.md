@@ -15,6 +15,6 @@ The rules below apply only when this session is executing a managed Product Deli
 
 - A mission worker is one bounded writer. It never delegates, edits parent-owned PLAN/RUN state, integrates, pushes, or cleans up. Authorization for those actions remains with the Harness parent and does not transfer to the worker.
 - Explorers, mission writers, and reviewers are parent-dispatched siblings. Each writer has explicit file ownership and a separate clean exact-base worktree.
-- After serial integration, dispatch one fresh read-only reviewer on the exact unified SHA with all applicable lenses. Allow one consolidated repair and one targeted recheck, then one broad final validation. Preserve historical RUN review policies and consumed attempts.
-- Harness 0.38+ RUNs close locally. Only the parent may later archive candidate C, commit and reverify archive-only A, and—under separate action-time authorization—publish A by exact-authorized no-force push and remote readback. Historical procedures remain pinned. No Claude worker receives that authority.
+- After serial integration, the parent dispatches one fresh read-only reviewer on the unified head carrying code, visual when UI changed, and the security lens in `delivery-harness/references/security-review.md`, then runs one broad final validation after it passes.
+- Harness 0.38+ RUNs close locally. Only the parent may later archive candidate C, commit and reverify archive-only A, and—under separate action-time authorization—publish A by exact-authorized no-force push and remote readback. No Claude worker receives that authority.
 - Return the exact worktree, branch, head SHA, changed files, verifier evidence, and blocking state through the completion channel supplied by the Harness parent.
