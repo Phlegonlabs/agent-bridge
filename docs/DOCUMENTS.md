@@ -1,5 +1,7 @@
 # Documents
 
+Current Epic: [EPIC-harness-0.61-context-sync](epics/EPIC-harness-0.61-context-sync.md)
+
 - `README.md`: generated cover, quick start, complete setup, provider and CLI usage, workflows, recovery and limitations.
 - `README.zh-TW.md`: the same public setup guide in Traditional Chinese.
 - [README presentation](epics/EPIC-readme-presentation.md): bilingual entry points, generated cover and documentation checks.
@@ -19,7 +21,8 @@
 - [ZCode chat images](zcode-images.md): default image routing with the existing Codex skill.
 - [ZCode image routing](epics/EPIC-zcode-image-routing.md): local chat routing changes and verification limits.
 - `docs/epics/native-provider.md`: implementation scope and native protocol evidence.
-
+- `AGENTS.md` and `CLAUDE.md`: shared governance entry and the Claude runtime import of it.
+- `docs/epics/`: one round-outcome record per Epic (scope, checkpoints, verification and the current handoff); never a second PRD or RUN.
 
 ## Harness context maintenance
 

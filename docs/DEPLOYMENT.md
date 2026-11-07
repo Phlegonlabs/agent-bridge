@@ -33,6 +33,14 @@ The deployment adds no environment keys. Existing local credentials remain priva
 The provider reads its local bearer token from `.bridge/provider/token`; authenticated checks verified it without printing its value.
 The selected CLIs retain their own account sign-ins. This deployment verified Codex access, not every configured model's entitlement.
 
+## Release Log
+
+Append one row per deployment before the next observation takes over the `## Observed deployment` current-state role, as `deployment-contract.md` "Recording The Model In A Repository" says. This manual loopback deployment has no Branch Promotion or Release Target Status to overwrite; the row keys the outgoing deployment by date, never by SHA alone.
+
+| Date | Release (slug or tag) | Candidate / main SHA | Units: deploy or build ID, status | Migrations | Rollback target | Evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| 2026-10-06 | observed loopback redeploy (untagged) | `7d7710a42a12a8e0249a851db7d39445f989dd05` deployed; candidate and main CI both passed at this SHA | local-provider: Node restart on 127.0.0.1:32147, health plus authenticated smoke PASS | none | deliberate source selection and idle restart; none executed | `## Observed deployment — 2026-10-06` above; `.bridge/release-deploy-48eae08d-684d-41e6-af0b-46be791dea60/deployment.json` |
+
 ## External Console Setup
 
 None. Deployment changed no account, provider registration, scheduled task, domain or hosted resource.
