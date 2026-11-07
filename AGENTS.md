@@ -48,7 +48,7 @@ The delivery flow binds stage slots, not fixed skill names. This table binds the
 | --- | --- | --- | --- |
 | ui_design | approved Product Definition → UI intake, directions, HiFi, approval | `ui-design-builder` | `b75491ea3b7f1a88db71fbcf5766f1f0e621e155965bda1c672f78e3a953a054` |
 | style_integration | approved PRD and selected direction → page theme and connected HiFi target | `frontend-design` | `fd14eb2fcb59fde11d9e75501995f1a08f21beaedf0ec407c4d44a954dd0eef3` |
-| design_compilation | frozen design-system pair | `design-system-compiler` | `3f20b9dda4d9572a42b96570f1669a07b88ae0c186cb88947eceb6dd0b96f456` |
+| design_compilation | frozen design-system pair | `design-system-compiler` | `ee27527bd3d9760180ded43de3c6c8a83831379926a4b4f267c0958a4881b27b` |
 | frontend_implementation | implementation missions | `frontend-design` | `fd14eb2fcb59fde11d9e75501995f1a08f21beaedf0ec407c4d44a954dd0eef3` |
 | ui_quality_verification | authorized HiFi review / consolidated UI acceptance | `impeccable` | `97f6246cccf374eb70b50b6b759e97a2a56b4bf8937489a259b32da5a161c7b7` |
 | code_security_verification | fresh unified code-security review before final regression and closeout | `delivery-harness/references/security-review.md` | `d45bf1254b51c37f6563a3dd029d80423396dc57d52a34bffa9ad1b94587094c` |
