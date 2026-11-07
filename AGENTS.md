@@ -40,6 +40,12 @@ These reading requirements apply only within an explicitly requested skill workf
 - Before any product-affecting direct work, the session reads the affected sections of `docs/product/PRD.md` plus every document `docs/DOCUMENTS.md` names for that scope (retained wireframes, design package, architecture). A named source that does not exist yet is reported, not skipped.
 - Skipping this reading is a blocking review finding: a change built on unread contracts is not a completed change.
 
+## Behavior Specs
+
+- Feature files live in `docs/product/features/` and belong to the PRD package. The owner approves scenario text; the writer owns step definitions and the code under them.
+- Each scenario has one `@TEST-...` tag. When `docs/product/features/` exists, `delivery-harness/scripts/render_delivery_acceptance.py` renders the delivery-acceptance register from it; never edit that register by hand. A package without feature files keeps its hand-written register.
+- Changing scenario text is a product decision and goes through a PRD delta. Changing only step definitions or implementation is a small fix on the existing Epic.
+
 ## Skill Bindings
 
 The delivery flow binds stage slots, not fixed skill names. This table binds the project's installed skills to those slots; updating it to adopt a new skill is a project edit, not a harness change, and a bound skill inherits the same modes, frozen sources, and review gates as the default.
@@ -75,6 +81,7 @@ Resolve `delivery-harness/` references against the observed installed delivery-h
 | Implementation or repair | `delivery-harness/references/governance/development-rules.md#keep-changes-simple` and `delivery-harness/references/governance/development-rules.md#consumer-core-development-principles` |
 | New or changed documentation | `delivery-harness/references/governance/development-rules.md#document-writing` |
 | A task introduces or retires a local-only file class | `delivery-harness/references/gitignore-contract.md` |
+| A task adds a hash-bound file class or root | `delivery-harness/references/gitattributes-contract.md` |
 | Product requirements, architecture, UI impact, redesign, pricing, or partner channel | `delivery-harness/references/governance/product-contracts.md#consumer-keep-product-contracts-current` |
 | Pricing, paid access, purchase-gated features, or outside sellers | `delivery-harness/references/project-operating-rules.md#monetization-and-partner-channels` |
 | Branch, commit, integration, archive, publication, cleanup, or protected-branch landing | `delivery-harness/references/governance/managed-delivery.md#git-safety` and `delivery-harness/references/commit-convention.md` |
