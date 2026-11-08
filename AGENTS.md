@@ -52,12 +52,12 @@ The delivery flow binds stage slots, not fixed skill names. This table binds the
 
 | Slot | Stage | Bound skill | Pinned SHA-256 |
 | --- | --- | --- | --- |
-| ui_design | approved Product Definition → UI intake, directions, HiFi, approval | `ui-design-builder` | `b75491ea3b7f1a88db71fbcf5766f1f0e621e155965bda1c672f78e3a953a054` |
+| ui_design | approved Product Definition → UI intake, directions, HiFi, approval | `ui-design-builder` | `de1a24c0be13e88a1e167ac6c0cf66561a9bc0229a6b0672346a6ec491fe357a` |
 | style_integration | approved PRD and selected direction → page theme and connected HiFi target | `frontend-design` | `fd14eb2fcb59fde11d9e75501995f1a08f21beaedf0ec407c4d44a954dd0eef3` |
 | design_compilation | frozen design-system pair | `design-system-compiler` | `ee27527bd3d9760180ded43de3c6c8a83831379926a4b4f267c0958a4881b27b` |
 | frontend_implementation | implementation missions | `frontend-design` | `fd14eb2fcb59fde11d9e75501995f1a08f21beaedf0ec407c4d44a954dd0eef3` |
 | ui_quality_verification | authorized HiFi review / consolidated UI acceptance | `impeccable` | `97f6246cccf374eb70b50b6b759e97a2a56b4bf8937489a259b32da5a161c7b7` |
-| code_security_verification | fresh unified code-security review before final regression and closeout | `delivery-harness/references/security-review.md` | `d45bf1254b51c37f6563a3dd029d80423396dc57d52a34bffa9ad1b94587094c` |
+| code_security_verification | fresh unified code-security review before final regression and closeout | `delivery-harness/references/security-review.md` | `8432db98a87cf13ed09d12183a3760e7c23323efc8e001144754848cbfa78a12` |
 
 Rows resolved 2026-11-05 under the owner explicit local-adoption authorization; each slot carries the recomputed full-tree SHA-256 of the installed bytes. The `code_security_verification` slot is the exception: it binds `delivery-harness/references/security-review.md` with the SHA-256 of that file, not a separate skill. `pending` in both cells is allowed only outside the checked stage. Product Definition uses `--stage product-definition`; UI authoring uses `--stage ui-design`; compilation uses `--stage design-compilation`; a proven headless/backend-only scope uses `--stage backend`. Omit `--stage` for full UI delivery or unknown applicability. Recheck at every stage change; a stage result never authorizes a later stage. `frontend-design` is external and supports visual direction/frontend authoring only; do not claim compilation, conformance, or read-only modes it does not define. The pinned `impeccable` profile needs separate authorization for its side effects (`delivery-harness/references/verification-gates.md`); it is not a Harness read-only reviewer. `delivery-harness/scripts/check_skill_bindings.py` rejects unresolved, fenced, duplicate, malformed, missing, or drifted bindings. The security reviewer dispatched through `code_security_verification` receives no implementation or lifecycle authority.
 
