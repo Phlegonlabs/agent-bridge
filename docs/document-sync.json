@@ -2,7 +2,7 @@
   "schema": "document-sync/1",
   "installed_digest": "359be684f6e653fad339c54cd5d6677b767eab7c97010570016e0c5a40c44fcd",
   "documents": {
-    "AGENTS.md": "b995764c3a7a2fd0891b9113cfb8df784408f1da446b21ed82988399c4b4559b",
+    "AGENTS.md": "fc184264bf2e7b44d885ba77046f260e9ef28fa28d51f2414197b8d887796a88",
     "AGENTS.override.md": null,
     "CLAUDE.md": "39f476bc67ebd0b85acdbf22b0a1a91770b85c549c4d3d451526b784e6bc63b8",
     "docs/DOCUMENTS.md": "34368eb28700b3a6bf256a90f08ed1674fe1767e9b54f7c9a293b9f91b775fad",
@@ -16,7 +16,7 @@
     "docs/epics/bridge.md": "b16a9f7f932b7f6c2ed3e73a4e490f9bd511005102d233a87a09ed057395bcc9",
     "docs/epics/EPIC-claude-long-task-reliability.md": "a0c0ed85f9a3095d736a8fe7137e46218120f85f656e2798e23d01e288a2ef23",
     "docs/epics/EPIC-delegate-observability.md": "70dca185d743a1dda0867d1230eaf9991c3c2cfeb02658236116952fe5653310",
-    "docs/epics/EPIC-harness-0.61-context-sync.md": "095deac36e62c64400d45d30683a4bf27269df887f15a2e472dfa2293ec2c12f",
+    "docs/epics/EPIC-harness-0.61-context-sync.md": "96150b89b7535ba63921abc98436b35fc24400e010187b264426e3c20ea385bd",
     "docs/epics/EPIC-readme-presentation.md": "69d5f6166862d2cbcce24fc5612273b284811969e247c29d9562335c5fb919a8",
     "docs/epics/EPIC-sol-streaming.md": "9d7765f7655bd61e4bb3937f050b53ee102c79c73e1f51e1a751dddbb27df2ce",
     "docs/epics/EPIC-zcode-image-routing.md": "3417b127b4d2c36dc5184dece416d989b9b14f01620326c41d6829b9561d87ec",
