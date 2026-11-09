@@ -14,8 +14,8 @@ Existing data protection and action authorization still apply.
 
 ## Harness Version
 
-- Shared installation: Harness `0.79.0` from commit `b3187e4849f937ca9d37a6b3a45b5323076f624d` (tag pending), installed 2026-11-07 under `C:/Users/mps19/.agents/skills`.
-- Five-skill contract SHA-256: `359be684f6e653fad339c54cd5d6677b767eab7c97010570016e0c5a40c44fcd`.
+- Shared installation: Harness `0.80.0` from commit `1c7dec9e3181e075c342d034688d4a8d62c49635` (tag `v0.80.0`), installed 2026-11-09 under `C:/Users/mps19/.agents/skills`.
+- Five-skill contract SHA-256: `6194d32aa30231387ff523021deba92223884c4f0ddd49bb68455239a392b8cb`.
 - Surfaces: the PRD Shape track is one of `web`, `app`, `agent`, `tool`, `content`; release targets and presence surfaces follow `delivery-harness/references/surface-catalog.md`. External setup and Measurement Sources live in `docs/DEPLOYMENT.md`; the activation record is retired.
 - Resolve `delivery-harness/` references, `--skill-dir` and `--skills-root` from the shared installation.
 - Preserve unresolved bindings, product approvals, original PLAN/RUN pins and their evidence. This adoption does not resume a RUN.
@@ -52,7 +52,7 @@ The delivery flow binds stage slots, not fixed skill names. This table binds the
 
 | Slot | Stage | Bound skill | Pinned SHA-256 |
 | --- | --- | --- | --- |
-| ui_design | approved Product Definition → UI intake, directions, HiFi, approval | `ui-design-builder` | `de1a24c0be13e88a1e167ac6c0cf66561a9bc0229a6b0672346a6ec491fe357a` |
+| ui_design | approved Product Definition → UI intake, directions, HiFi, approval | `ui-design-builder` | `9a7144a7269976ff8aede4cdb70eea4f32cb251fa68ca7a3d7cc87966f32680e` |
 | style_integration | approved PRD and selected direction → page theme and connected HiFi target | `frontend-design` | `fd14eb2fcb59fde11d9e75501995f1a08f21beaedf0ec407c4d44a954dd0eef3` |
 | design_compilation | frozen design-system pair | `design-system-compiler` | `ee27527bd3d9760180ded43de3c6c8a83831379926a4b4f267c0958a4881b27b` |
 | frontend_implementation | implementation missions | `frontend-design` | `fd14eb2fcb59fde11d9e75501995f1a08f21beaedf0ec407c4d44a954dd0eef3` |
