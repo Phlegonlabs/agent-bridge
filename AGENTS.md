@@ -14,8 +14,8 @@ Existing data protection and action authorization still apply.
 
 ## Harness Version
 
-- Shared installation: Harness `0.80.0` from commit `1c7dec9e3181e075c342d034688d4a8d62c49635` (tag `v0.80.0`), installed 2026-11-09 under `C:/Users/mps19/.agents/skills`.
-- Five-skill contract SHA-256: `6194d32aa30231387ff523021deba92223884c4f0ddd49bb68455239a392b8cb`.
+- Shared installation: Harness `0.83.1` from commit `cacd22ba296a1f7b93b5e803545d47bc88a704a6` (tag `v0.83.1`), installed 2026-11-16 under `C:/Users/mps19/.agents/skills`.
+- Five-skill contract SHA-256: `ba059a530aded6f33c5d20b43c1eed3b922ed1308c7f995c98b8752015d881fb`.
 - Surfaces: the PRD Shape track is one of `web`, `app`, `agent`, `tool`, `content`; release targets and presence surfaces follow `delivery-harness/references/surface-catalog.md`. External setup and Measurement Sources live in `docs/DEPLOYMENT.md`; the activation record is retired.
 - Resolve `delivery-harness/` references, `--skill-dir` and `--skills-root` from the shared installation.
 - Preserve unresolved bindings, product approvals, original PLAN/RUN pins and their evidence. This adoption does not resume a RUN.
@@ -52,9 +52,9 @@ The delivery flow binds stage slots, not fixed skill names. This table binds the
 
 | Slot | Stage | Bound skill | Pinned SHA-256 |
 | --- | --- | --- | --- |
-| ui_design | approved Product Definition → UI intake, directions, HiFi, approval | `ui-design-builder` | `9a7144a7269976ff8aede4cdb70eea4f32cb251fa68ca7a3d7cc87966f32680e` |
+| ui_design | approved Product Definition → UI intake, directions, HiFi, approval | `ui-design-builder` | `168af68f5ce0cd3b29059b66765f9e4a16bc2c040797d5d5c8e450a50a383684` |
 | style_integration | approved PRD and selected direction → page theme and connected HiFi target | `frontend-design` | `fd14eb2fcb59fde11d9e75501995f1a08f21beaedf0ec407c4d44a954dd0eef3` |
-| design_compilation | frozen design-system pair | `design-system-compiler` | `ee27527bd3d9760180ded43de3c6c8a83831379926a4b4f267c0958a4881b27b` |
+| design_compilation | frozen design-system pair | `design-system-compiler` | `a456b561faa688b489be1468159cc6bb63231f5ab3dcf7800ae447d6b6f0a634` |
 | frontend_implementation | implementation missions | `frontend-design` | `fd14eb2fcb59fde11d9e75501995f1a08f21beaedf0ec407c4d44a954dd0eef3` |
 | ui_quality_verification | authorized HiFi review / consolidated UI acceptance | `impeccable` | `97f6246cccf374eb70b50b6b759e97a2a56b4bf8937489a259b32da5a161c7b7` |
 | code_security_verification | fresh unified code-security review before final regression and closeout | `delivery-harness/references/security-review.md` | `8432db98a87cf13ed09d12183a3760e7c23323efc8e001144754848cbfa78a12` |
