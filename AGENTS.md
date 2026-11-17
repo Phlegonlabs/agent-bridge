@@ -14,8 +14,8 @@ Existing data protection and action authorization still apply.
 
 ## Harness Version
 
-- Shared installation: Harness `0.84.0` from commit `c9a5c7c82df1995c00538d94068012f665897ab2` (tag `v0.84.0`), installed 2026-11-16 under `C:/Users/mps19/.agents/skills`.
-- Five-skill contract SHA-256: `f10bbcaff316aa2b003263965635cac1dfe067d88f48b2f7343c908cc4856fbf`.
+- Shared installation: Harness `0.87.0` from commit `6b5457634cd30ebf12a2d598bc5cfbf7d30ff068` (tag `v0.87.0`), installed 2026-11-17 under `C:/Users/mps19/.agents/skills`.
+- Five-skill contract SHA-256: `996be1469755f85b9e6653967d987a3b744ecdc624a1b277ae33a2a39ba4d9be`.
 - Surfaces: the PRD Shape track is one of `web`, `app`, `agent`, `tool`, `content`; release targets and presence surfaces follow `delivery-harness/references/surface-catalog.md`. External setup and Measurement Sources live in `docs/DEPLOYMENT.md`; the activation record is retired.
 - Resolve `delivery-harness/` references, `--skill-dir` and `--skills-root` from the shared installation.
 - Preserve unresolved bindings, product approvals, original PLAN/RUN pins and their evidence. This adoption does not resume a RUN.
@@ -52,12 +52,12 @@ The delivery flow binds stage slots, not fixed skill names. This table binds the
 
 | Slot | Stage | Bound skill | Pinned SHA-256 |
 | --- | --- | --- | --- |
-| ui_design | approved Product Definition → UI intake, directions, HiFi, approval | `ui-design-builder` | `168af68f5ce0cd3b29059b66765f9e4a16bc2c040797d5d5c8e450a50a383684` |
+| ui_design | approved Product Definition → UI intake, directions, HiFi, approval | `ui-design-builder` | `2792374b8f40acfc495a0234450d47dd1851a9c7cd2bf4f0baf3df12fef8d369` |
 | style_integration | approved PRD and selected direction → page theme and connected HiFi target | `frontend-design` | `fd14eb2fcb59fde11d9e75501995f1a08f21beaedf0ec407c4d44a954dd0eef3` |
-| design_compilation | frozen design-system pair | `design-system-compiler` | `a456b561faa688b489be1468159cc6bb63231f5ab3dcf7800ae447d6b6f0a634` |
+| design_compilation | frozen design-system pair | `design-system-compiler` | `062c907d061a213c3579afaa2fb9018e2eb0cb2958a4f4a4caa47833326f8cbf` |
 | frontend_implementation | implementation missions | `frontend-design` | `fd14eb2fcb59fde11d9e75501995f1a08f21beaedf0ec407c4d44a954dd0eef3` |
 | ui_quality_verification | authorized HiFi review / consolidated UI acceptance | `impeccable` | `97f6246cccf374eb70b50b6b759e97a2a56b4bf8937489a259b32da5a161c7b7` |
-| code_security_verification | fresh unified code-security review before final regression and closeout | `delivery-harness/references/security-review.md` | `8432db98a87cf13ed09d12183a3760e7c23323efc8e001144754848cbfa78a12` |
+| code_security_verification | fresh unified code-security review before final regression and closeout | `delivery-harness/references/security-review.md` | `b94331db016bb3a2143a7815e41d70c13036cb7866c8b33235fb03db4ed9a5d0` |
 
 Rows resolved 2026-11-05 under the owner explicit local-adoption authorization; each slot carries the recomputed full-tree SHA-256 of the installed bytes. The `code_security_verification` slot is the exception: it binds `delivery-harness/references/security-review.md` with the SHA-256 of that file, not a separate skill. `pending` in both cells is allowed only outside the checked stage. Product Definition uses `--stage product-definition`; UI authoring uses `--stage ui-design`; compilation uses `--stage design-compilation`; a proven headless/backend-only scope uses `--stage backend`. Omit `--stage` for full UI delivery or unknown applicability. Recheck at every stage change; a stage result never authorizes a later stage. `frontend-design` is external and supports visual direction/frontend authoring only; do not claim compilation, conformance, or read-only modes it does not define. The pinned `impeccable` profile needs separate authorization for its side effects (`delivery-harness/references/verification-gates.md`); it is not a Harness read-only reviewer. `delivery-harness/scripts/check_skill_bindings.py` rejects unresolved, fenced, duplicate, malformed, missing, or drifted bindings. The security reviewer dispatched through `code_security_verification` receives no implementation or lifecycle authority.
 
